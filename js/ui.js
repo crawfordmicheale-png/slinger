@@ -107,6 +107,7 @@ function render() {
 // ---------------------------------------------------------------------------
 const SCREENS = {
   title: () => `
+    <div class="title-hero">${ART.heroArt()}</div>
     <section class="title-screen">
       <h1 class="logo">Slinger</h1>
       <p class="tag">A frontier deckbuilder of demons and vengeance</p>
@@ -153,7 +154,7 @@ const SCREENS = {
     const person = (f, i) => {
       const reveal = f.seen ? (f.demon ? 'demon' : 'human') : null;
       return `<div class="folk ${f.gone ? 'gone' : ''} ${reveal ? 'seen-' + reveal : ''}">
-        <div class="portrait">${ART.folk(i + t.name.length, reveal)}</div>
+        <div class="portrait">${ART.folkArt(f, f.demon && f.seen ? t.enc.foes[0] : null, i + t.name.length)}</div>
         <div class="folk-name">${esc(f.name)}</div>
         <div class="folk-role">the ${esc(f.role)}</div>
         <ul class="tells">${f.tells.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
@@ -183,7 +184,7 @@ const SCREENS = {
       <section class="poster">
         <div class="poster-head">WANTED</div>
         <div class="poster-sub">DEAD — NOT ALIVE</div>
-        <div class="poster-art">${ART.demon(ENEMIES[e.foes[0]].art)}</div>
+        <div class="poster-art">${ART.demonArt(e.foes[0])}</div>
         <div class="poster-name">${esc(e.name)}</div>
         <p class="poster-text">${esc(e.bounty)}</p>
         <div class="poster-reward">REWARD: a keepsake &amp; bounty gold</div>
@@ -198,7 +199,7 @@ const SCREENS = {
     return `
       <section class="panel story boss-intro">
         <h2>${esc(b.guise)}</h2>
-        <div class="boss-art">${ART.demon(ENEMIES[b.foes[0]].art)}</div>
+        <div class="boss-art">${ART.demonArt(b.foes[0])}</div>
         <p>${esc(b.before)}</p>
         <button class="btn big danger" data-act="fight-boss">For ${kinName(b.kin)}.</button>
       </section>`;
@@ -213,7 +214,7 @@ const SCREENS = {
       const chips = c.intentInfo(e).map(i => `<span class="intent i-${i.kind}">${INTENT_ICON[i.kind]}${i.label}</span>`).join('');
       return `<div class="foe ${e.hp <= 0 ? 'dead' : ''} ${targeting && e.hp > 0 ? 'targetable' : ''} ${e.boss ? 'is-boss' : ''} ${e.minion ? 'is-minion' : ''}" data-uid="${e.uid}" data-act="${targeting && e.hp > 0 ? 'target' : ''}">
         <div class="intents" data-tip="${esc(c.intentText(e))}">${e.hp > 0 ? chips : ''}</div>
-        <div class="foe-art">${ART.demon(e.art)}</div>
+        <div class="foe-art">${ART.demonArt(e.id)}</div>
         <div class="foe-name">${esc(e.name)}</div>
         ${barHTML(e.hp, e.maxHp, e.block)}
         <div class="statuses">${statusHTML(e.st)}</div>
@@ -242,7 +243,7 @@ const SCREENS = {
         <div class="battle-banner">The Between</div>
         <div class="arena">
           <div class="hero-side" data-uid="player">
-            <div class="hero-art">${ART.hero()}</div>
+            <div class="hero-art">${ART.heroArt()}</div>
             <div class="foe-name">${HERO.name}</div>
             ${barHTML(p.hp, p.maxHp, p.block)}
             <div class="statuses">${statusHTML(p.st)}${Object.entries(p.pw).map(([k, n]) => `<span class="st st-power" data-tip="${esc(CARDS[k].name)}">${esc(CARDS[k].name)}${n > 1 ? ' ' + n : ''}</span>`).join('')}</div>

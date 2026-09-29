@@ -11,71 +11,10 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <!-- The town backdrop. In the Between it is the same place, only wrong. -->
+  <!-- The town backdrop. In the Between it is the same street, only wrong. -->
   <div id="scene" aria-hidden="true">
-    <svg viewBox="0 0 1600 700" preserveAspectRatio="xMidYMax slice">
-      <defs>
-        <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" class="sky-top"/>
-          <stop offset="0.65" class="sky-mid"/>
-          <stop offset="1" class="sky-low"/>
-        </linearGradient>
-        <radialGradient id="sunGrad">
-          <stop offset="0" class="sun-core"/>
-          <stop offset="0.6" class="sun-core"/>
-          <stop offset="1" class="sun-edge"/>
-        </radialGradient>
-      </defs>
-      <rect width="1600" height="700" fill="url(#skyGrad)"/>
-      <circle class="sun" cx="1180" cy="300" r="120" fill="url(#sunGrad)"/>
-      <path class="mesa far" d="M0 470 L120 470 L160 400 L330 400 L370 470 L620 470 L650 430 L760 430 L800 470 L1050 470 L1090 380 L1300 380 L1340 470 L1600 470 L1600 700 L0 700Z"/>
-      <path class="mesa near" d="M0 520 L260 520 L300 480 L420 480 L450 520 L1600 520 L1600 700 L0 700Z"/>
-      <g class="town">
-        <!-- church -->
-        <g class="bld church">
-          <path d="M150 600 L150 470 L210 420 L270 470 L270 600Z"/>
-          <path d="M195 430 L195 360 L210 330 L225 360 L225 430Z"/>
-          <path class="cross" d="M207 300 h6 v12 h10 v6 h-10 v22 h-6 v-22 h-10 v-6 h10z"/>
-          <rect class="win" x="198" y="480" width="24" height="36" rx="12"/>
-        </g>
-        <!-- saloon -->
-        <g class="bld saloon">
-          <path d="M360 600 L360 440 L560 440 L560 600Z"/>
-          <path d="M340 440 L580 440 L580 420 L340 420Z"/>
-          <rect class="sign" x="385" y="448" width="150" height="30"/>
-          <rect class="win" x="385" y="500" width="40" height="40"/>
-          <rect class="win" x="495" y="500" width="40" height="40"/>
-          <path class="door" d="M440 600 L440 545 L480 545 L480 600Z"/>
-        </g>
-        <!-- water tower -->
-        <g class="bld tower">
-          <path d="M650 600 L665 480 L672 480 L660 600Z M760 600 L745 480 L738 480 L750 600Z"/>
-          <path d="M640 480 L770 480 L770 400 Q705 380 640 400Z"/>
-        </g>
-        <!-- store -->
-        <g class="bld store">
-          <path d="M840 600 L840 470 L1000 470 L1000 600Z"/>
-          <path d="M830 470 L1010 470 L1010 440 L830 440Z"/>
-          <rect class="win" x="860" y="500" width="30" height="36"/>
-          <rect class="win" x="950" y="500" width="30" height="36"/>
-        </g>
-        <!-- jail -->
-        <g class="bld jail">
-          <path d="M1250 600 L1250 490 L1400 490 L1400 600Z"/>
-          <rect class="win bars" x="1280" y="515" width="30" height="30"/>
-          <rect class="win bars" x="1340" y="515" width="30" height="30"/>
-        </g>
-        <!-- gallows -->
-        <g class="bld gallows">
-          <path d="M1480 600 L1480 470 L1570 470 L1570 478 L1490 478 L1490 600Z"/>
-          <path class="rope" d="M1550 478 L1550 520"/>
-          <circle class="rope" cx="1550" cy="528" r="8" fill="none"/>
-        </g>
-        <!-- cactus -->
-        <path class="bld cactus" d="M1110 600 L1110 500 Q1110 488 1122 488 Q1134 488 1134 500 L1134 600Z M1110 545 L1090 545 L1090 515 Q1090 505 1098 505 Q1106 505 1106 515 L1106 535 L1110 535Z M1134 530 L1150 530 L1150 505 Q1150 497 1157 497 Q1164 497 1164 505 L1164 540 L1134 540Z"/>
-      </g>
-      <rect class="ground" x="0" y="598" width="1600" height="102"/>
-    </svg>
+    <div class="bg bg-day"></div>
+    <div class="bg bg-between"></div>
     <div id="spores"></div>
     <div id="vignette"></div>
   </div>

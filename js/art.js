@@ -97,5 +97,16 @@ const ART = (() => {
   const eye = (on = true) =>
     `<svg class="eye-ico ${on ? 'on' : 'off'}" viewBox="0 0 24 16" aria-hidden="true"><path d="M1 8 Q12 -4 23 8 Q12 20 1 8Z"/><circle cx="12" cy="8" r="3.4"/></svg>`;
 
-  return { demon, folk, hero, eye };
+  // Painted art (art/*.webp). The SVG silhouettes above remain as a fallback
+  // when an image fails to load.
+  const img = (file, cls, alt, fallback) =>
+    `<img class="${cls}" src="art/${file}.webp" alt="${alt}" draggable="false" loading="lazy" ` +
+    `onerror="this.outerHTML=this.dataset.fb" data-fb="${fallback.replace(/"/g, '&quot;')}">`;
+  const demonArt = id => img(id, 'paint demon-paint', ENEMIES[id].name, demon(ENEMIES[id].art));
+  const heroArt = () => img('hero', 'paint hero-paint', HERO.name, hero());
+  const folkArt = (f, demonId, seed) =>
+    `<div class="portrait-stack">${img(f.img || 'folk_0', 'paint guise', f.name, folk(seed, null))}` +
+    (demonId ? img(demonId, 'paint true-form', ENEMIES[demonId].name, demon(ENEMIES[demonId].art)) : '') + '</div>';
+
+  return { demon, folk, hero, eye, demonArt, heroArt, folkArt };
 })();

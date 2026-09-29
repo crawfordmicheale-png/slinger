@@ -494,7 +494,7 @@ const ENCOUNTERS = {
   1: {
     normal: [
       { foes: ['razorjaw'], role: 'barber', tells: ['Keeps stropping a razor that is already sharp.', 'Hair on the floor of his shop is still moving.'] },
-      { foes: ['mourner'], role: 'widow in black', tells: ['Mourns a husband nobody in town remembers.', 'Her veil breathes when she does not.'] },
+      { foes: ['mourner'], role: 'widow in black', g: 'f', tells: ['Mourns a husband nobody in town remembers.', 'Her veil breathes when she does not.'] },
       { foes: ['hollow_deputy'], role: 'deputy', tells: ['Wears a star with no name on it.', 'Stands too still. Like a scarecrow with a gun.'] },
       { foes: ['cinder_hound', 'cinder_hound'], role: 'stable hand', tells: ['The horses have kicked their stalls to splinters.', 'Two dogs follow him. Their eyes glow like cigar ends.'] },
     ],
@@ -509,7 +509,7 @@ const ENCOUNTERS = {
     normal: [
       { foes: ['measurer'], role: 'undertaker', tells: ['Had a coffin built for you before you rode in.', 'His measuring tape is made of hair.'] },
       { foes: ['card_devil'], role: 'faro dealer', tells: ['Has never lost a hand. Not once.', 'The cards in his deck are all the same card.'] },
-      { foes: ['chalk_wraith'], role: 'schoolmarm', tells: ['The children recite lessons in a language that makes your teeth hurt.', 'Her chalk writes by itself.'] },
+      { foes: ['chalk_wraith'], role: 'schoolmarm', g: 'f', tells: ['The children recite lessons in a language that makes your teeth hurt.', 'Her chalk writes by itself.'] },
       { foes: ['jackal', 'jackal'], role: 'pair of drifters', tells: ['Two brothers who laugh at the same moment, every time.', 'They have been "just passing through" for six years.'] },
     ],
     elite: { foes: ['mother_tallow'], name: 'Mother Tallow', bounty: 'Candle-maker. Sells tapers that burn with no smoke and no light. Folks who buy them stop waking up.' },
@@ -524,7 +524,7 @@ const ENCOUNTERS = {
       { foes: ['hanging_judge'], role: 'circuit judge', tells: ['Has hanged thirty men this year. Never held a trial.', 'His gavel is wet.'] },
       { foes: ['false_shepherd'], role: 'traveling missionary', tells: ['His congregation never blinks during the sermon.', 'The cross on his chapel hangs upside down when nobody looks.'] },
       { foes: ['iron_horror'], role: 'railroad surveyor', tells: ['Lays track that leads nowhere.', 'Smells of coal smoke and cooked meat.'] },
-      { foes: ['crow', 'crow', 'crow'], role: 'three sisters', tells: ['Three old women who finish each other\'s sentences.', 'Birds fall silent when they pass.'] },
+      { foes: ['crow', 'crow', 'crow'], role: 'three sisters', g: 'f', tells: ['Three old women who finish each other\'s sentences.', 'Birds fall silent when they pass.'] },
     ],
     elite: { foes: ['brimstone_marshal'], name: 'The Brimstone Marshal', bounty: 'Wears a star just like the one you used to. Serves warrants for the other side.' },
     boss: {
@@ -545,9 +545,20 @@ const CHAPTERS = {
 // TOWNSFOLK
 // ---------------------------------------------------------------------------
 const FOLK = {
-  first: ['Ezra', 'Hattie', 'Obadiah', 'Josephine', 'Clem', 'Mabel', 'Virgil', 'Opal', 'Rufus', 'Delia', 'Willa', 'Cyrus', 'Etta', 'Luther', 'Pearl', 'Jasper', 'Nell', 'Boone', 'Ida', 'Silas', 'Martha', 'Gideon', 'Lottie', 'Wendell'],
+  first: {
+    m: ['Ezra', 'Obadiah', 'Clem', 'Virgil', 'Rufus', 'Cyrus', 'Luther', 'Jasper', 'Boone', 'Silas', 'Gideon', 'Wendell'],
+    f: ['Hattie', 'Josephine', 'Mabel', 'Opal', 'Delia', 'Willa', 'Etta', 'Pearl', 'Nell', 'Ida', 'Martha', 'Lottie'],
+  },
   last: ['Tate', 'McCready', 'Lowell', 'Pruitt', 'Hatch', 'Crowley', 'Doyle', 'Beckett', 'Sayer', 'Whitlock', 'Garrity', 'Fenn', 'Mercer', 'Colby', 'Vance', 'Holloway', 'Pike', 'Ashby'],
-  roles: ['blacksmith', 'telegraph operator', 'saloon singer', 'preacher', 'rancher', 'doctor', 'barkeep', 'prospector', 'shopkeeper', 'stagecoach driver', 'laundress', 'gunsmith', 'banker', 'farrier', 'cook', 'sheriff\'s widow'],
+  // Painted portraits (art/<img>.webp) and the jobs each one plausibly holds.
+  portraits: [
+    { img: 'folk_0', g: 'm', roles: ['blacksmith', 'farrier', 'gunsmith'] },
+    { img: 'folk_1', g: 'f', roles: ['saloon singer', 'barkeep', 'cook'] },
+    { img: 'folk_2', g: 'm', roles: ['prospector', 'stagecoach driver', 'mule skinner'] },
+    { img: 'folk_3', g: 'f', roles: ['laundress', 'sheriff\'s widow', 'seamstress'] },
+    { img: 'folk_4', g: 'm', roles: ['shopkeeper', 'telegraph operator', 'bank clerk'] },
+    { img: 'folk_5', g: 'f', roles: ['rancher', 'horse breaker', 'homesteader'] },
+  ],
   mundane: [
     'Counts his coins twice. Then a third time.',
     'Hums a hymn, badly.',

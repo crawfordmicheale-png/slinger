@@ -469,17 +469,22 @@ class Run {
       usedTells.add(t);
       return t;
     };
-    const roles = shuffle(this.rng, FOLK.roles.slice());
+    // Each stranger gets a portrait; the demon's disguise matches its guise.
+    const pics = shuffle(this.rng, FOLK.portraits.slice());
+    const demonG = enc.g || 'm';
+    const dpi = pics.findIndex(pt => pt.g === demonG);
+    const demonPic = pics.splice(dpi, 1)[0];
     for (let i = 0; i < 3; i++) {
-      let name;
-      do { name = `${pick(this.rng, FOLK.first)} ${pick(this.rng, FOLK.last)}`; } while (names.has(name));
-      names.add(name);
       const demon = i === demonIdx;
+      const pic = demon ? demonPic : pics.pop();
+      let name;
+      do { name = `${pick(this.rng, FOLK.first[pic.g])} ${pick(this.rng, FOLK.last)}`; } while (names.has(name));
+      names.add(name);
       const tells = demon
         ? [this.rng() < 0.5 ? tell(enc.tells) : tell(FOLK.demonic), tell(FOLK.mundane)]
         : [tell(FOLK.mundane), this.rng() < 0.55 ? tell(FOLK.ambiguous) : tell(FOLK.mundane)];
       folk.push({
-        name, role: demon ? enc.role : roles[i],
+        name, role: demon ? enc.role : pick(this.rng, pic.roles), img: pic.img,
         tells: shuffle(this.rng, tells),
         demon, seen: false, gone: false,
       });
