@@ -6,7 +6,8 @@
 //   AUDIO.sfx(name, delaySeconds)   play a sound effect
 //   AUDIO.music(name)               'trail' | 'between' | 'boss' | 'somber' | null
 //   AUDIO.unlock()                  call from a user gesture (browsers require it)
-//   AUDIO.toggle('music'|'sfx')     flip a channel on/off; remembered per browser
+//   AUDIO.toggle('music'|'sfx'|'voice')  flip a channel on/off; remembered per browser
+//   AUDIO.voice(id) / stopVoice()   play a recorded line from art/voice/<id>.mp3
 // ---------------------------------------------------------------------------
 
 const AUDIO = (() => {
@@ -14,7 +15,11 @@ const AUDIO = (() => {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage may be blocked */ } },
   };
-  const on = { music: store.get('slinger.music') !== '0', sfx: store.get('slinger.sfx') !== '0' };
+  const on = {
+    music: store.get('slinger.music') !== '0',
+    sfx: store.get('slinger.sfx') !== '0',
+    voice: store.get('slinger.voice') !== '0',
+  };
   const LEVEL = { music: 0.26, sfx: 0.9 };
 
   let ctx = null;
@@ -56,7 +61,8 @@ const AUDIO = (() => {
   function toggle(ch) {
     on[ch] = !on[ch];
     store.set('slinger.' + ch, on[ch] ? '1' : '0');
-    if (ctx) bus[ch].gain.setTargetAtTime(on[ch] ? LEVEL[ch] : 0, ctx.currentTime, 0.08);
+    if (ch === 'voice') { if (!on.voice) stopVoice(); }
+    else if (ctx) bus[ch].gain.setTargetAtTime(on[ch] ? LEVEL[ch] : 0, ctx.currentTime, 0.08);
     return on[ch];
   }
 
@@ -358,6 +364,34 @@ const AUDIO = (() => {
     toll(t) { bell(45, t, 0.3); bell(57, t + 0.01, 0.12); },
   };
 
+  // ---- voice acting -----------------------------------------------------------------
+  // Recorded lines play through a plain <audio> element (works from file:// too);
+  // the music ducks underneath while someone is talking.
+  let speaking = null;
+  function duck(down) {
+    if (ctx && on.music) bus.music.gain.setTargetAtTime(down ? LEVEL.music * 0.3 : LEVEL.music, ctx.currentTime, 0.25);
+  }
+  function stopVoice() {
+    if (!speaking) return;
+    speaking.pause();
+    speaking = null;
+    duck(false);
+  }
+  function speak(id, delay = 0.6) {
+    stopVoice();
+    if (!on.voice || !id) return;
+    const a = new Audio(`art/voice/${id}.mp3`);
+    a.volume = 1;
+    speaking = a;
+    a.addEventListener('ended', () => { if (speaking === a) { speaking = null; duck(false); } });
+    setTimeout(() => {
+      if (speaking !== a) return;
+      duck(true);
+      const p = a.play();
+      if (p && p.catch) p.catch(() => { if (speaking === a) { speaking = null; duck(false); } });
+    }, delay * 1000);
+  }
+
   function sfx(name, delay = 0) {
     if (!ctx || !on.sfx || !FX[name]) return;
     try { FX[name](ctx.currentTime + 0.01 + delay); } catch (e) { /* never let sound break the game */ }
@@ -376,5 +410,5 @@ const AUDIO = (() => {
     return errs;
   }
 
-  return { unlock, music, sfx, toggle, isOn: ch => on[ch], selfCheck };
+  return { unlock, music, sfx, voice: speak, stopVoice, toggle, isOn: ch => on[ch], selfCheck };
 })();

@@ -583,3 +583,4 @@ body.between #vignette { background: radial-gradient(ellipse at center, rgba(0,0
   #hud .btn.snd { min-width: 28px; }
   #hud .keepsake { width: 24px; height: 24px; font-size: 10px; }
 }
+.btn.replay { margin: 0 4px; padding: 2px 8px; font-size: 12px; vertical-align: middle; font-style: normal; }

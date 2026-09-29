@@ -91,7 +91,8 @@ function renderHUD() {
 
 function soundButtons() {
   return `<button class="btn small snd ${AUDIO.isOn('music') ? '' : 'off'}" data-act="toggle-music" aria-pressed="${AUDIO.isOn('music')}" title="Music">♫</button>` +
-    `<button class="btn small snd ${AUDIO.isOn('sfx') ? '' : 'off'}" data-act="toggle-sfx" aria-pressed="${AUDIO.isOn('sfx')}" title="Sound effects">✹</button>`;
+    `<button class="btn small snd ${AUDIO.isOn('sfx') ? '' : 'off'}" data-act="toggle-sfx" aria-pressed="${AUDIO.isOn('sfx')}" title="Sound effects">✹</button>` +
+    `<button class="btn small snd ${AUDIO.isOn('voice') ? '' : 'off'}" data-act="toggle-voice" aria-pressed="${AUDIO.isOn('voice')}" title="Voices">❝</button>`;
 }
 
 // Which music plays on which screen.
@@ -102,9 +103,24 @@ function musicFor(name) {
   return 'trail';
 }
 
+// Which recorded line (art/voice/<id>.mp3) plays when a screen opens.
+function voiceFor(name) {
+  const ch = S.run && S.run.chapter;
+  if (name === 'chapterIntro') return `letter_${ch}`;
+  if (name === 'boss') return `taunt_${ch}`;
+  if (name === 'chapterEnd' && ENCOUNTERS[ch].boss.last) return `last_${ch}`;
+  if (name === 'finale') return 'finale';
+  return null;
+}
+
+// A small replay button beside a voiced line.
+const replay = id => `<button class="btn small replay" data-act="voice" data-id="${id}" title="Hear it again" aria-label="Hear it again">▶</button>`;
+
 function setScreen(name) {
+  const prev = S.screen;
   S.screen = name;
   AUDIO.music(musicFor(name));
+  if (name !== prev) AUDIO.voice(voiceFor(name));
   S.sel = null;
   document.body.classList.toggle('between', name === 'combat' || name === 'finale');
   render();
@@ -222,7 +238,7 @@ const SCREENS = {
         <h2>${esc(b.guise)}</h2>
         <div class="boss-art">${ART.demonArt(b.foes[0])}</div>
         <p>${esc(b.before)}</p>
-        <p class="speech">${esc(b.taunt)}</p>
+        <p class="speech">${esc(b.taunt)} ${replay(`taunt_${S.run.chapter}`)}</p>
         <button class="btn big danger" data-act="fight-boss">For ${kinName(b.kin)}.</button>
       </section>`;
   },
@@ -369,7 +385,7 @@ const SCREENS = {
     return `
       <section class="panel story">
         <h2>${kinName(b.kin)} can rest now.</h2>
-        ${b.last ? `<p class="speech">${esc(b.last)}</p>` : ''}
+        ${b.last ? `<p class="speech">${esc(b.last)} ${replay(`last_${S.run.chapter}`)}</p>` : ''}
         <p>${esc(b.after)}</p>
         ${b.reward ? `<p class="loot-line keepsake-line">${keepsakeHTML(b.reward)} <b>${esc(KEEPSAKES[b.reward].name)}</b> — ${esc(KEEPSAKES[b.reward].desc)}</p>` : ''}
         <p class="sub">You rest for three days. Your wounds close. (Health fully restored.)</p>
@@ -386,7 +402,7 @@ const SCREENS = {
         <h2>${esc(CHAPTERS[r.chapter].title.split(' — ')[1])}</h2>
         <figure class="letter">
           <blockquote>${esc(ci.letter.text)}</blockquote>
-          <figcaption>${ci.letter.from === 'unsigned' ? 'An unsigned card' : 'A letter from ' + esc(ci.letter.from)}</figcaption>
+          <figcaption>${replay(`letter_${r.chapter}`)} ${ci.letter.from === 'unsigned' ? 'An unsigned card' : 'A letter from ' + esc(ci.letter.from)}</figcaption>
         </figure>
         ${ci.paras.map(p => `<p>${esc(p)}</p>`).join('')}
         <button class="btn big" data-act="to-map">Ride on</button>
@@ -398,7 +414,7 @@ const SCREENS = {
     return `
       <section class="panel story finale">
         <div class="boss-art">${ART.demonArt('grey_gentleman')}</div>
-        ${FINALE.text.map((p, i) => `<p class="${i ? 'speech' : ''}">${esc(p)}</p>`).join('')}
+        ${FINALE.text.map((p, i) => `<p class="${i ? 'speech' : ''}">${esc(p)}${i ? ' ' + replay('finale') : ''}</p>`).join('')}
         <div class="options">
           ${FINALE.options.map(o => {
             const ok = !o.req || o.req(r);
@@ -940,6 +956,8 @@ const ACTIONS = {
   'journal': showJournal,
   'toggle-music': () => { AUDIO.unlock(); AUDIO.toggle('music'); render(); },
   'toggle-sfx': () => { AUDIO.unlock(); AUDIO.toggle('sfx'); render(); },
+  'toggle-voice': () => { AUDIO.toggle('voice'); render(); },
+  'voice': el => AUDIO.voice(el.dataset.id, 0),
   'ending': el => { S.endingId = el.dataset.id; S.run.addJournal(ENDINGS[S.endingId].title, ENDINGS[S.endingId].text[0]); setScreen('victory'); },
   'view-deck': () => showCards(`Your deck (${S.run.deck.length})`, S.run.deck, false),
   'view-pile': el => {

@@ -28,7 +28,7 @@ To serve it locally instead: `npm start`, or run any static file server in this 
 - **Statuses.** Wrath adds damage to every hit, Exposed takes +50% damage, Shaken deals −25%, and Hellfire burns every turn.
 - **Keepsakes** (relics). You start with your old Tin Star and Clara's Locket. Beating a boss gives you a keepsake of the sibling you avenged.
 
-Sound starts after your first click or tap (browsers require that). The ♫ and ✹ buttons toggle music and sound effects.
+Sound starts after your first click or tap (browsers require that). The ♫, ✹ and ❝ buttons toggle music, sound effects and voices.
 
 Keys in combat: `1`–`9` play a card, `E` ends your turn, `Esc` cancels targeting.
 
@@ -41,6 +41,7 @@ Keys in combat: `1`–`9` play a card, `E` ends your turn, `Esc` cancels targeti
 | `js/art.js` | Painted character art (`art/*.webp`), with inline SVG silhouettes as a fallback |
 | `art/` | Painted art generated with Higgsfield (GPT Image 2.5): Jonah, 20 demons, 6 townsfolk portraits, the town by day and in the Between, and an illustration for every card (`art/cards/`) |
 | `js/audio.js` | Sound effects and music, all synthesized with Web Audio (no audio files): plucked guitar, whistle, drones, bells, gunshots with canyon echo |
+| `art/voice/` | Voiced lines (Higgsfield, ElevenLabs voices): the three chapter letters, each boss's taunt and last words, and the finale |
 | `js/ui.js` | Screens, input handling, and combat animation (card flights, gunfire tracers, slashes, demon lunges, death burns) |
 | `css/style.css` | Styling for daylight and for the Between |
 | `tests/sim.js` | Headless simulation. A greedy bot plays hundreds of full runs, checking invariants and reporting win rate |
