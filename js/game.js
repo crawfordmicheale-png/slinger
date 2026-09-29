@@ -114,7 +114,8 @@ class Combat {
 
   spawn(id) {
     const def = ENEMIES[id];
-    const hp = randInt(this.rng, def.hp[0], def.hp[1]);
+    let hp = randInt(this.rng, def.hp[0], def.hp[1]);
+    if (this.run.ledger >= 1) hp = Math.round(hp * 1.1);
     const e = {
       uid: 'e' + (_uid++), id, name: def.name, art: def.art,
       hp, maxHp: hp, block: 0, st: {},
@@ -126,6 +127,7 @@ class Combat {
       hostage: def.hostage ? { ...def.hostage } : null,
     };
     if (def.ward) e.st.ward = def.ward;
+    if (this.run.ledger >= 4 && (e.elite || e.boss)) e.st.wrath = 2;
     this.enemies.push(e);
     this.chooseIntent(e);
     return e;
@@ -140,6 +142,7 @@ class Combat {
       key = e.pattern[e.step % e.pattern.length];
     }
     e.intent = Object.assign({ key }, def.moves[key]);
+    if (e.intent.atk && this.run.ledger >= 2) e.intent.atk = Math.floor(e.intent.atk * 1.1);
     if (e.intent.mimic) e.intent.atk = this.lastAttack ? this.lastAttack.dmg : 6;
   }
 
@@ -204,6 +207,7 @@ class Combat {
     tgt.hp -= n;
     if (tgt.isPlayer) {
       if (this.p.pw.vengeful_spirit) this.applySelf('wrath', this.p.pw.vengeful_spirit);
+      if (this.p.pw.scar_tissue) this.p.block += this.p.pw.scar_tissue;
       if (this.run.has('claras_locket') && !this.lockedOnce && tgt.hp > 0 && tgt.hp * 2 < tgt.maxHp) {
         this.lockedOnce = true;
         this.applySelf('wrath', 3);
@@ -290,6 +294,7 @@ class Combat {
     const r = this.fired.length ? this.fired.shift() : null;
     const R = r ? ROUNDS[r] : null;
     if (R && R.dud) { this.emit({ type: 'dud', uid: t.uid }); this.say('Click. A dud.'); return; }
+    if (!r && this.melee && this.p.pw.bare_knuckle) dmg += this.p.pw.bare_knuckle;
     if (r) {
       if (this.shotsThisTurn === 0 && this.p.pw.steady_aim) dmg += this.p.pw.steady_aim;
       this.shotsThisTurn++;
@@ -301,7 +306,10 @@ class Combat {
     this.damage(this.p, t, dmg);
     this.curRound = null;
     if (R && t.hp > 0 && R.onHit) R.onHit(this, t);
-    if (R && R.splash) this.alive().filter(e => e !== t).forEach(e => this.damage(this.p, e, R.splash));
+    if (R && R.splash) {
+      const splash = R.splash + (this.run.has('eli_ring') ? 2 : 0);
+      this.alive().filter(e => e !== t).forEach(e => this.damage(this.p, e, splash));
+    }
   }
 
   // ---- API used by card play() callbacks --------------------------------------
@@ -322,6 +330,7 @@ class Combat {
   cover(n) { this.p.block += n; this.emit({ type: 'cover', uid: 'player', n }); }
   apply(t, key, n) {
     if (!(t && t.hp > 0 && n > 0)) return;
+    if (key === 'burn' && !t.isPlayer && this.run.has('psalter')) n += 1;
     t.st[key] = (t.st[key] || 0) + n;
     this.emit({ type: 'status', uid: t.uid, key, n });
     if (key === 'exposed' && t.hostage) {
@@ -354,6 +363,7 @@ class Combat {
     if (this.over) return { ok: false };
     const s = cardStats(card);
     if (s.def.unplayable) return { ok: false, why: 'Unplayable' };
+    if (s.def.req && !s.def.req(this)) return { ok: false, why: s.def.reqWhy };
     if (s.cost > this.p.grit) return { ok: false, why: 'Not enough Grit' };
     if (s.rounds === 'all' ? this.p.rounds < 1 : s.rounds > this.p.rounds) return { ok: false, why: 'Out of Rounds — Reload!' };
     return { ok: true };
@@ -380,6 +390,7 @@ class Combat {
     this.fired = [];
     for (let i = 0; i < this.spent; i++) this.fired.push(this.fireOne());
     this.firedThisCard = this.fired.slice();
+    this.melee = s.def.type === 'attack' && !s.rounds;
     if (this.spent) this.emit({ type: 'shot', n: this.spent, rounds: this.firedThisCard });
     this.hand.splice(handIdx, 1);
     this.say(`You play ${s.name}.`);
@@ -422,6 +433,7 @@ class Combat {
     this.shotsThisTurn = 0;
     if (p.pw.quick_hands) this.reload(p.pw.quick_hands);
     if (p.pw.consecrate_ground) this.applyAll('burn', p.pw.consecrate_ground);
+    if (p.pw.clairvoyance && this.alive().length) this.apply(pick(this.rng, this.alive()), 'exposed', p.pw.clairvoyance);
     if (p.pw.lawmans_instinct) p.block += p.pw.lawmans_instinct;
     let n = HERO.handSize;
     if (this.turn === 1 && this.run.has('snake_oil')) n += 2;
@@ -567,15 +579,26 @@ class Combat {
 const STEPS_PER_CHAPTER = 6; // 5 choices then the boss
 
 class Run {
-  constructor(seed) {
+  /**
+   * @param {number} [seed]
+   * @param {{hero?: string, ledger?: number, styles?: string[]}} [opts]
+   *   hero   = which hunter (see HEROES)
+   *   ledger = difficulty page, 0 to LEDGER.length - 1
+   *   styles = unlocked card styles beyond the defaults (e.g. ['brawl', 'seer'])
+   */
+  constructor(seed, opts = {}) {
     this.rng = makeRng(seed);
-    this.hp = HERO.maxHp;
-    this.maxHp = HERO.maxHp;
+    this.hero = HEROES[opts.hero] ? opts.hero : 'jonah';
+    this.ledger = Math.max(0, Math.min(LEDGER.length - 1, opts.ledger || 0));
+    this.styles = ['gun', 'holy'].concat(opts.styles || []);
+    const h = HEROES[this.hero];
+    this.hp = this.maxHp = h.hp;
     this.gold = HERO.gold;
-    this.sight = HERO.maxSight;
-    this.maxSight = HERO.maxSight;
-    this.deck = STARTER_DECK.map(id => newCard(id));
-    this.keepsakes = ['tin_star', 'claras_locket'];
+    this.maxSight = h.sight - (this.ledger >= 5 ? 1 : 0);
+    this.sight = this.maxSight;
+    this.deck = h.deck.map(id => newCard(id));
+    if (this.ledger >= 5) this.deck.push(newCard('grief'));
+    this.keepsakes = h.keepsakes.slice();
     this.chapter = 1;
     this.step = 0;
     this.usedTowns = [];
@@ -584,15 +607,15 @@ class Run {
     this.innocents = 0;
     this.flags = {};    // story choices: remembered, confessed, forgiven, vow
     this.journal = [];  // { chapter, title, text }
-    this.belt = STARTING_BELT.slice(); // the load you start every fight with, chamber by chamber
-    this.tonics = ['miracle'];         // the satchel, up to TONIC_SLOTS
+    this.belt = h.belt.slice();       // the load you start every fight with, chamber by chamber
+    this.tonics = h.tonics.slice();   // the satchel, up to TONIC_SLOTS
     this.infamy = 0;
     this.removals = 0;
-    this.choices = this.genChoices();
+    this.newMap();
   }
 
   // ---- saving ---------------------------------------------------------------------
-  static SAVE_FIELDS = ['hp', 'maxHp', 'gold', 'sight', 'maxSight', 'deck', 'keepsakes', 'chapter', 'step',
+  static SAVE_FIELDS = ['hero', 'ledger', 'styles', 'map', 'path', 'hp', 'maxHp', 'gold', 'sight', 'maxSight', 'deck', 'keepsakes', 'chapter', 'step',
     'usedTowns', 'usedEvents', 'kills', 'innocents', 'flags', 'journal', 'belt', 'removals', 'choices',
     'tonics', 'infamy'];
 
@@ -655,33 +678,79 @@ class Run {
     return t;
   }
 
-  genChoices() {
-    const s = this.step;
-    if (s === STEPS_PER_CHAPTER - 1) return [{ type: 'boss' }];
-    if (s === 0) return [{ type: 'town' }, { type: 'town' }];
-    const weights = { town: 40, trail: 22, camp: 14, post: 14, wanted: s >= 2 ? 16 : 0 };
-    const out = [];
-    const want = 3;
-    let guard = 0;
-    while (out.length < want && guard++ < 50) {
-      const t = weightedPick(this.rng, weights);
-      if (t !== 'town' && out.some(o => o.type === t)) continue;
-      if (out.filter(o => o.type === 'town').length >= 2 && t === 'town') continue;
-      out.push({ type: t });
+  // ---- the chapter map ---------------------------------------------------------------
+  /**
+   * Lay out the whole chapter as columns of stops joined by trails. Column 2
+   * holds the chapter's story stop, column 4 a campfire, and every route ends
+   * at the boss.
+   */
+  newMap() {
+    const L = STEPS_PER_CHAPTER;
+    const layers = [];
+    for (let i = 0; i < L; i++) {
+      if (i === L - 1) { layers.push([{ type: 'boss', next: [] }]); continue; }
+      if (i === 0) { layers.push([{ type: 'town' }, { type: 'town' }].map(n => ({ ...n, next: [] }))); continue; }
+      const n = i === 2 || i === L - 2 ? 2 : 3;
+      const weights = { town: 40, trail: 22, camp: i === L - 2 ? 0 : 14, post: 14, wanted: i >= 2 ? 16 : 0 };
+      const col = [];
+      let guard = 0;
+      while (col.length < n && guard++ < 60) {
+        const t = weightedPick(this.rng, weights);
+        if (t !== 'town' && col.some(o => o.type === t)) continue;
+        if (t === 'town' && col.filter(o => o.type === 'town').length >= 2) continue;
+        col.push({ type: t, next: [] });
+      }
+      if (i === 2) col.splice(Math.floor(this.rng() * (col.length + 1)), 0, { type: 'story', next: [] });
+      if (i === L - 2) col.splice(Math.floor(this.rng() * (col.length + 1)), 0, { type: 'camp', next: [] });
+      layers.push(col);
     }
-    if (s === STEPS_PER_CHAPTER - 2 && !out.some(o => o.type === 'camp')) out[out.length - 1] = { type: 'camp' };
-    if (s === 2) out[0] = { type: 'story' }; // each chapter's story encounter
-    return out;
+    // Trails: each stop leads to its nearest neighbours in the next column, and
+    // every stop in the next column is reachable from somewhere.
+    for (let i = 0; i < L - 1; i++) {
+      const a = layers[i], b = layers[i + 1];
+      a.forEach((node, j) => {
+        const k = a.length === 1 ? Math.floor(b.length / 2) : Math.round(j * (b.length - 1) / (a.length - 1));
+        node.next = [k];
+        const side = k + (this.rng() < 0.5 ? -1 : 1);
+        if (b[side] && this.rng() < 0.55) node.next.push(side);
+        if (b.length === 1) node.next = [0];
+      });
+      b.forEach((_, k) => {
+        if (!a.some(n => n.next.includes(k))) {
+          const j = Math.round(k * (a.length - 1) / Math.max(1, b.length - 1));
+          a[Math.min(j, a.length - 1)].next.push(k);
+        }
+      });
+      a.forEach(n => n.next.sort((x, y) => x - y));
+    }
+    this.map = layers;
+    this.path = [];       // column index chosen at each step
+    this.choices = this.reachable();
   }
 
-  advance() {
+  /** Stops you can ride to next: {type, idx} */
+  reachable() {
+    if (this.chapter > 3) return [];
+    const col = this.map[this.step];
+    const from = this.step === 0 ? col.map((_, i) => i) : this.map[this.step - 1][this.path[this.step - 1]].next;
+    return from.map(idx => ({ type: col[idx].type, idx }));
+  }
+
+  /** Move on from the stop at column index `idx` of the current step. */
+  advance(idx) {
+    // Fall back to a real stop if we lost track of which one was taken.
+    const ok = Number.isInteger(idx) && this.choices.some(c => c.idx === idx);
+    const fallback = this.choices.find(c => Number.isInteger(c.idx));
+    this.path[this.step] = ok ? idx : fallback ? fallback.idx : 0;
     this.step++;
     if (this.step >= STEPS_PER_CHAPTER) {
       this.chapter++;
       this.step = 0;
       this.usedTowns = [];
+      if (this.chapter <= 3) this.newMap(); else this.choices = [];
+      return;
     }
-    this.choices = this.chapter <= 3 ? this.genChoices() : [];
+    this.choices = this.reachable();
   }
 
   // ---- towns ------------------------------------------------------------------
@@ -745,7 +814,7 @@ class Run {
     return {
       name: this.townName(), folk, enc, scene,
       victim: pick(this.rng, CASE.victims),
-      questions: 5 + (this.has('lawmans_notebook') ? 2 : 0) - (this.infamy >= 4 ? 1 : 0) - (this.infamy >= 7 ? 1 : 0),
+      questions: 5 + HEROES[this.hero].questions + (this.has('lawmans_notebook') ? 2 : 0) - (this.infamy >= 4 ? 1 : 0) - (this.infamy >= 7 ? 1 : 0) - (this.ledger >= 3 ? 1 : 0),
       usedSight: false,
     };
   }
@@ -758,7 +827,7 @@ class Run {
     while (out.length < n && guard++ < 200) {
       const r = this.rng();
       const rarity = r < 0.08 + rareBoost ? 'rare' : r < 0.42 + rareBoost ? 'uncommon' : 'common';
-      const pool = ids.filter(id => CARDS[id].rarity === rarity && !out.includes(id));
+      const pool = ids.filter(id => CARDS[id].rarity === rarity && !out.includes(id) && (!CARDS[id].style || this.styles.includes(CARDS[id].style)));
       if (pool.length) out.push(pick(this.rng, pool));
     }
     return out;

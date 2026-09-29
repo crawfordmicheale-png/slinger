@@ -26,6 +26,10 @@ const S = {
   flash: '',         // one-line message on a screen
 };
 
+// The story as the current hunter lives it, and a title swap for generic text.
+const ST = () => storyFor(S.run ? S.run.hero : 'jonah');
+const heroDef = () => HEROES[S.run ? S.run.hero : 'jonah'];
+const T = text => (!S.run || S.run.hero === 'jonah') ? text : String(text).replace(/\bMarshal\b/g, HEROES[S.run.hero].title);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kinName = k => FAMILY[k];
 
@@ -75,7 +79,7 @@ function renderHUD() {
   const eyes = Array.from({ length: r.maxSight }, (_, i) => ART.eye(i < r.sight)).join('');
   hud.innerHTML = `
     <div class="hud-left">
-      <span class="hud-name">${HERO.name}</span>
+      <span class="hud-name">${esc(heroDef().name)}${r.ledger ? ` <small class="hud-ledger" data-tip="${esc(LEDGER.slice(1, r.ledger + 1).map(l => l.desc).join(' '))}">${esc(LEDGER[r.ledger].name)}</small>` : ''}</span>
       <span class="hud-hp" data-tip="Health">♥ ${hp}/${r.maxHp}</span>
       <span class="hud-gold" data-tip="Gold">$ ${r.gold}</span>
       <span class="hud-sight" data-tip="Veil Sight: look through a stranger's skin to see what they really are, or see a veiled demon's next move. Restored at camp.">${eyes}</span>
@@ -103,6 +107,34 @@ function tonicIcons(list, usable) {
   }).join('');
 }
 
+/** The chapter drawn as columns of stops joined by trails. Reachable stops are clickable. */
+function mapSVG(r, nameOf) {
+  const L = r.map.length, W = 660, H = 250;
+  const x = i => 44 + i * ((W - 88) / (L - 1));
+  const y = (i, j) => H / 2 + (j - (r.map[i].length - 1) / 2) * 78;
+  const reach = new Map(r.choices.map((c, k) => [c.idx, k]));
+  let lines = '', dots = '';
+  r.map.forEach((col, i) => col.forEach((n, j) => {
+    n.next.forEach(k => {
+      const walked = r.path[i] === j && r.path[i + 1] === k;
+      const open = i === r.step - 1 && r.path[i] === j;
+      lines += `<line class="m-trail ${walked ? 'walked' : ''} ${open ? 'open' : ''}" x1="${x(i)}" y1="${y(i, j)}" x2="${x(i + 1)}" y2="${y(i + 1, k)}"/>`;
+    });
+  }));
+  r.map.forEach((col, i) => col.forEach((n, j) => {
+    const here = i === r.step && reach.has(j);
+    const visited = i < r.step && r.path[i] === j;
+    const past = i < r.step && !visited;
+    const rad = n.type === 'boss' ? 24 : 18;
+    const attrs = here ? `data-act="pick-node" data-i="${reach.get(j)}" tabindex="0" role="button"` : '';
+    dots += `<g class="m-node m-${n.type} ${here ? 'reach' : ''} ${visited ? 'visited' : ''} ${past ? 'past' : ''}" ${attrs} data-tip="${esc(nameOf(n.type))}">
+      <circle cx="${x(i)}" cy="${y(i, j)}" r="${rad}"/>
+      <text x="${x(i)}" y="${y(i, j) + 6}" text-anchor="middle">${NODE_INFO[n.type].icon}</text>
+    </g>`;
+  }));
+  return `<div class="chapter-map"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Chapter map">${lines}${dots}</svg></div>`;
+}
+
 function soundButtons() {
   return `<button class="btn small snd ${AUDIO.isOn('music') ? '' : 'off'}" data-act="toggle-music" aria-pressed="${AUDIO.isOn('music')}" title="Music">♫</button>` +
     `<button class="btn small snd ${AUDIO.isOn('sfx') ? '' : 'off'}" data-act="toggle-sfx" aria-pressed="${AUDIO.isOn('sfx')}" title="Sound effects">✹</button>` +
@@ -122,6 +154,7 @@ function voiceFor(name) {
   const ch = S.run && S.run.chapter;
   if (name === 'chapterIntro') return `letter_${ch}`;
   if (name === 'boss') return `taunt_${ch}`;
+  if (!ST().voiced) return null;
   if (name === 'chapterEnd' && ENCOUNTERS[ch].boss.last) return `last_${ch}`;
   if (name === 'finale') return 'finale';
   return null;
@@ -165,15 +198,44 @@ const SCREENS = {
           const sv = loadSave();
           return sv ? `<button class="btn big" data-act="continue">Continue<br><small>${esc(CHAPTERS[Math.min(3, sv.chapter)].title)} · ♥ ${sv.hp}/${sv.maxHp}</small></button>` : '';
         })()}
-        <button class="btn ${loadSave() ? '' : 'big'}" data-act="new-run">${loadSave() ? 'New Hunt' : 'Ride Out'}</button>
+        <button class="btn ${loadSave() ? '' : 'big'}" data-act="setup">${loadSave() ? 'New Hunt' : 'Ride Out'}</button>
         <button class="btn" data-act="how">How to Play</button>
         <div class="title-sound">${soundButtons()}</div>
       </div>
     </section>`,
 
+  setup: () => {
+    const prof = loadProfile();
+    const chosen = S.setupHero || 'jonah';
+    const lvl = Math.min(S.setupLedger || 0, prof.ledger);
+    const hunter = key => {
+      const h = HEROES[key];
+      const locked = h.unlock && !prof.unlocks[h.unlock.key];
+      return `<button class="hunter ${chosen === key ? 'sel' : ''} ${locked ? 'locked' : ''}" data-act="pick-hero" data-id="${key}" ${locked ? 'disabled' : ''}>
+        <span class="hunter-art">${locked ? '<span class="lock">?</span>' : ART.heroArt(key)}</span>
+        <b>${esc(h.name)}</b>
+        <small>${locked ? 'Locked. ' + esc(h.unlock.text) : `♥ ${h.hp} · ${ART.eye(true)} ${h.sight}${h.questions ? ` · +${h.questions} questions` : ''}`}</small>
+        ${locked ? '' : `<span class="hunter-blurb">${esc(h.blurb)}</span>`}
+      </button>`;
+    };
+    const styles = Object.entries(STYLE_UNLOCKS).map(([k, u]) => `<li class="${prof.unlocks[k] ? 'got' : ''}">${prof.unlocks[k] ? '✔' : '✖'} ${esc(u.name)}${prof.unlocks[k] ? '' : ' — ' + esc(u.text)}</li>`).join('');
+    return `
+      <section class="panel setup">
+        <h2>Who rides out?</h2>
+        <div class="hunters">${Object.keys(HEROES).map(hunter).join('')}</div>
+        <h3 class="setup-h">The Ledger</h3>
+        <div class="ledger-pages">
+          ${LEDGER.map((l, i) => `<button class="ledger-page ${i === lvl ? 'sel' : ''}" data-act="pick-ledger" data-i="${i}" ${i > prof.ledger ? 'disabled' : ''} data-tip="${esc(i > prof.ledger ? 'Win on the page before this one to open it.' : LEDGER.slice(0, i + 1).map(x => x.desc).join(' '))}">${i > prof.ledger ? '🔒 ' : ''}${esc(l.name)}</button>`).join('')}
+        </div>
+        <p class="sub">${esc(LEDGER.slice(1, lvl + 1).map(l => l.desc).join(' ') || LEDGER[0].desc)}</p>
+        <ul class="unlocks">${styles}</ul>
+        <div class="row center"><button class="btn big" data-act="new-run">Ride out</button><button class="btn" data-act="title">Back</button></div>
+      </section>`;
+  },
+
   intro: () => `
     <section class="panel story">
-      ${STORY.intro.map(p => `<p>${esc(p)}</p>`).join('')}
+      ${ST().intro.map(p => `<p>${esc(p)}</p>`).join('')}
       <p class="between-note">${esc(STORY.between)}</p>
       <button class="btn big" data-act="to-chapter">Take up the hunt</button>
     </section>`,
@@ -181,26 +243,22 @@ const SCREENS = {
   map: () => {
     const r = S.run;
     const ch = CHAPTERS[r.chapter];
-    const boss = ENCOUNTERS[r.chapter].boss;
-    const dots = Array.from({ length: STEPS_PER_CHAPTER }, (_, i) =>
-      `<span class="trail-dot ${i < r.step ? 'done' : i === r.step ? 'here' : ''} ${i === STEPS_PER_CHAPTER - 1 ? 'boss' : ''}"></span>`).join('<span class="trail-line"></span>');
-    const node = (c, i) => {
-      const info = NODE_INFO[c.type];
-      const story = STORY_EVENTS[r.chapter];
-      const name = c.type === 'boss' ? esc(boss.guise) : c.type === 'story' ? esc(story.title) : info.name;
-      const desc = c.type === 'boss' ? `The one who killed ${kinName(boss.kin)}.` : c.type === 'story' ? `Someone here knew ${kinName(story.kin)}.` : info.desc;
-      return `<button class="node node-${c.type}" data-act="pick-node" data-i="${i}">
-        <span class="node-ico">${info.icon}</span>
-        <span class="node-name">${name}</span>
-        <span class="node-desc">${desc}</span>
+    const st = ST();
+    const boss = st.boss(r.chapter);
+    const story = st.story(r.chapter);
+    const nameOf = type => type === 'boss' ? boss.guise : type === 'story' ? story.title : NODE_INFO[type].name;
+    const descOf = type => type === 'boss' ? st.hunt(r.chapter) : type === 'story' ? `Someone here knew ${story.kicker}.` : NODE_INFO[type].desc;
+    const node = (c, i) => `<button class="node node-${c.type}" data-act="pick-node" data-i="${i}">
+        <span class="node-ico">${NODE_INFO[c.type].icon}</span>
+        <span class="node-name">${esc(nameOf(c.type))}</span>
+        <span class="node-desc">${esc(descOf(c.type))}</span>
       </button>`;
-    };
     return `
       <section class="map">
         <h2>${ch.title}</h2>
-        <p class="sub">Hunting the one who killed ${kinName(ch.kin)}.</p>
-        <div class="trail">${dots}</div>
-        <p class="prompt">Which way, Marshal?</p>
+        <p class="sub">${esc(st.hunt(r.chapter))}</p>
+        ${mapSVG(r, nameOf)}
+        <p class="prompt">${esc(T('Which way, Marshal?'))}</p>
         <div class="nodes">${r.choices.map(node).join('')}</div>
       </section>`;
   },
@@ -268,14 +326,14 @@ const SCREENS = {
   },
 
   boss: () => {
-    const b = ENCOUNTERS[S.run.chapter].boss;
+    const b = ST().boss(S.run.chapter);
     return `
       <section class="panel story boss-intro">
         <h2>${esc(b.guise)}</h2>
         <div class="boss-art">${ART.demonArt(b.foes[0])}</div>
         <p>${esc(b.before)}</p>
-        <p class="speech">${esc(b.taunt)} ${replay(`taunt_${S.run.chapter}`)}</p>
-        <button class="btn big danger" data-act="fight-boss">For ${kinName(b.kin)}.</button>
+        <p class="speech">${esc(b.taunt)} ${ST().voiced ? replay(`taunt_${S.run.chapter}`) : ''}</p>
+        <button class="btn big danger" data-act="fight-boss">${esc(b.cry)}</button>
       </section>`;
   },
 
@@ -327,8 +385,8 @@ const SCREENS = {
         <div class="battle-banner">The Between</div>
         <div class="arena">
           <div class="hero-side" data-uid="player">
-            <div class="hero-art">${ART.heroArt()}</div>
-            <div class="foe-name">${HERO.name}</div>
+            <div class="hero-art">${ART.heroArt(S.run.hero)}</div>
+            <div class="foe-name">${esc(heroDef().name)}</div>
             ${barHTML(p.hp, p.maxHp, p.block)}
             <div class="statuses">${statusHTML(p.st)}${Object.entries(p.pw).map(([k, n]) => `<span class="st st-power" data-tip="${esc(CARDS[k].name)}">${esc(CARDS[k].name)}${n > 1 ? ' ' + n : ''}</span>`).join('')}</div>
           </div>
@@ -380,7 +438,7 @@ const SCREENS = {
 
   camp: () => {
     const r = S.run;
-    const heal = Math.floor(r.maxHp * 0.3);
+    const heal = campHeal(r);
     return `
       <section class="panel camp">
         <h2>Campfire</h2>
@@ -423,24 +481,25 @@ const SCREENS = {
     const r = S.run;
     return `
       <section class="panel event ${ev.kin ? 'story-event' : ''}">
-        ${ev.kin ? `<div class="kicker">${kinName(ev.kin)}</div>` : ''}
+        ${ev.kicker || ev.kin ? `<div class="kicker">${esc(ev.kicker || kinName(ev.kin))}</div>` : ''}
         <h2>${esc(ev.title)}</h2>
-        <p>${esc(ev.text)}</p>
-        ${S.eventResult ? `<p class="result">${esc(S.eventResult)}</p><div class="row center"><button class="btn big" data-act="leave">Ride on</button></div>` : `
+        <p>${esc(T(ev.text))}</p>
+        ${S.eventResult ? `<p class="result">${esc(T(S.eventResult))}</p><div class="row center"><button class="btn big" data-act="leave">Ride on</button></div>` : `
         <div class="options">
-          ${ev.options.map((o, i) => `<button class="btn option" data-act="event-opt" data-i="${i}" ${!o.req || o.req(r) ? '' : 'disabled'}>${esc(typeof o.label === 'function' ? o.label(r) : o.label)}</button>`).join('')}
+          ${ev.options.map((o, i) => `<button class="btn option" data-act="event-opt" data-i="${i}" ${!o.req || o.req(r) ? '' : 'disabled'}>${esc(T(typeof o.label === 'function' ? o.label(r) : o.label))}</button>`).join('')}
         </div>`}
       </section>`;
   },
 
   chapterEnd: () => {
-    const b = ENCOUNTERS[S.run.chapter].boss;
+    const b = ST().boss(S.run.chapter);
+    const got = S.bossKeepsake;
     return `
       <section class="panel story">
-        <h2>${kinName(b.kin)} can rest now.</h2>
-        ${b.last ? `<p class="speech">${esc(b.last)} ${replay(`last_${S.run.chapter}`)}</p>` : ''}
+        <h2>${esc(b.rest)}</h2>
+        ${b.last ? `<p class="speech">${esc(b.last)} ${ST().voiced ? replay(`last_${S.run.chapter}`) : ''}</p>` : ''}
         <p>${esc(b.after)}</p>
-        ${b.reward ? `<p class="loot-line keepsake-line">${keepsakeHTML(b.reward)} <b>${esc(KEEPSAKES[b.reward].name)}</b> — ${esc(KEEPSAKES[b.reward].desc)}</p>` : ''}
+        ${got ? `<p class="loot-line keepsake-line">${keepsakeHTML(got)} <b>${esc(KEEPSAKES[got].name)}</b> — ${esc(KEEPSAKES[got].desc)}</p>` : ''}
         <p class="sub">You rest for three days. Your wounds close. (Health fully restored.)</p>
         <button class="btn big" data-act="next-chapter">Ride for ${esc(CHAPTERS[S.run.chapter + 1].title.split('— ')[1])}</button>
       </section>`;
@@ -448,14 +507,14 @@ const SCREENS = {
 
   chapterIntro: () => {
     const r = S.run;
-    const ci = CHAPTER_INTROS[r.chapter];
+    const ci = ST().chapter(r.chapter);
     return `
       <section class="panel story chapter-intro">
         <div class="kicker">${esc(CHAPTERS[r.chapter].title.split(' — ')[0])}</div>
         <h2>${esc(CHAPTERS[r.chapter].title.split(' — ')[1])}</h2>
         <figure class="letter">
           <blockquote>${esc(ci.letter.text)}</blockquote>
-          <figcaption>${replay(`letter_${r.chapter}`)} ${ci.letter.from === 'unsigned' ? 'An unsigned card' : 'A letter from ' + esc(ci.letter.from)}</figcaption>
+          <figcaption>${ST().voiced ? replay(`letter_${r.chapter}`) : ''} ${ci.letter.from === 'unsigned' ? 'An unsigned card' : 'A letter from ' + esc(ci.letter.from)}</figcaption>
         </figure>
         ${ci.paras.map(p => `<p>${esc(p)}</p>`).join('')}
         <button class="btn big" data-act="to-map">Ride on</button>
@@ -467,31 +526,33 @@ const SCREENS = {
     return `
       <section class="panel story finale">
         <div class="boss-art">${ART.demonArt('grey_gentleman')}</div>
-        ${FINALE.text.map((p, i) => `<p class="${i ? 'speech' : ''}">${esc(p)}${i ? ' ' + replay('finale') : ''}</p>`).join('')}
+        ${ST().finaleText.map((p, i) => `<p class="${i ? 'speech' : ''}">${esc(p)}${i && ST().voiced ? ' ' + replay('finale') : ''}</p>`).join('')}
         <div class="options">
           ${FINALE.options.map(o => {
-            const ok = !o.req || o.req(r);
-            return `<button class="btn option" data-act="ending" data-id="${o.id}" ${ok ? '' : 'disabled'}>${esc(o.label)}${ok ? '' : `<br><small>${esc(o.locked)}</small>`}</button>`;
+            const rest = o.id === 'rest' ? ST().rest : null;
+            const ok = rest ? rest.req(r) : !o.req || o.req(r);
+            return `<button class="btn option" data-act="ending" data-id="${o.id}" ${ok ? '' : 'disabled'}>${esc(o.label)}${ok ? '' : `<br><small>${esc(rest ? rest.locked : o.locked)}</small>`}</button>`;
           }).join('')}
         </div>
       </section>`;
   },
 
   victory: () => {
-    const e = ENDINGS[S.endingId || 'hunter'];
+    const e = ST().endings[S.endingId || 'hunter'];
     return `
     <section class="panel story victory">
       <div class="kicker">Ending</div>
       <h2>${esc(e.title)}</h2>
       ${e.text.map(p => `<p>${esc(p)}</p>`).join('')}
-      <p class="stats">Demons sent back: ${S.run.kills} · Innocents wronged: ${S.run.innocents} · Infamy: ${S.run.infamy} · Journal entries: ${S.run.journal.length}</p>
+      ${S.unlockNote ? `<p class="loot-note">${esc(S.unlockNote)}</p>` : ''}
+      <p class="stats">${esc(heroDef().name)} · ${esc(LEDGER[S.run.ledger].name)} · Demons sent back: ${S.run.kills} · Innocents wronged: ${S.run.innocents} · Infamy: ${S.run.infamy} · Journal entries: ${S.run.journal.length}</p>
       <button class="btn big" data-act="title">The End</button>
     </section>`;
   },
 
   gameover: () => `
     <section class="panel story gameover">
-      <h2>Here lies Jonah Crane</h2>
+      <h2>Here lies ${esc(heroDef().name)}</h2>
       <p>${esc(STORY.death)}</p>
       <p class="stats">${esc(CHAPTERS[Math.min(3, S.run.chapter)].title)} · Demons sent back: ${S.run.kills}</p>
       <button class="btn big" data-act="new-run">Ride again</button>
@@ -515,7 +576,14 @@ const INTENT_ICON = { atk: '⚔ ', def: '⛨ ', buff: '▲ ', debuff: '☠ ', su
 // ---------------------------------------------------------------------------
 function newRun() {
   clearSave();
-  S.run = new Run();
+  const prof = loadProfile();
+  const hero = S.setupHero || 'jonah';
+  const h = HEROES[hero];
+  S.run = new Run(undefined, {
+    hero: h.unlock && !prof.unlocks[h.unlock.key] ? 'jonah' : hero,
+    ledger: Math.min(S.setupLedger || 0, prof.ledger),
+    styles: Object.keys(STYLE_UNLOCKS).filter(k => prof.unlocks[k]),
+  });
   S.combat = null;
   setScreen('intro');
 }
@@ -523,6 +591,7 @@ function newRun() {
 function pickNode(i) {
   const r = S.run;
   const c = r.choices[i];
+  S.nodeIdx = c.idx;
   S.flash = '';
   S.campDone = false;
   switch (c.type) {
@@ -536,11 +605,11 @@ function pickNode(i) {
     case 'wanted': setScreen('wanted'); break;
     case 'camp':
       r.sight = r.maxSight;
-      S.memory = pick(r.rng, MEMORIES);
+      S.memory = pick(r.rng, ST().memories);
       setScreen('camp');
       break;
     case 'story':
-      S.event = STORY_EVENTS[r.chapter];
+      S.event = ST().story(r.chapter);
       S.eventResult = null;
       setScreen('event');
       break;
@@ -550,7 +619,7 @@ function pickNode(i) {
       if (r.infamy >= 3 && r.rng() < r.infamy * 0.08) {
         S.event = POSSE_EVENT; S.eventResult = null; setScreen('event'); break;
       }
-      let pool = EVENTS.filter(e => !r.usedEvents.includes(e.id));
+      let pool = EVENTS.filter(e => !r.usedEvents.includes(e.id) && (!e.jonahOnly || r.hero === 'jonah'));
       if (!pool.length) { r.usedEvents = []; pool = EVENTS; }
       S.event = pick(r.rng, pool);
       r.usedEvents.push(S.event.id);
@@ -594,7 +663,43 @@ function beltClick(i) {
 
 // ---- save & continue --------------------------------------------------------------
 // The run is saved in this browser at every stop on the trail map.
-const SAVE_KEY = 'slinger.save.v1';
+const SAVE_KEY = 'slinger.save.v2';
+
+// ---- profile: what you've unlocked across runs ------------------------------------
+const PROFILE_KEY = 'slinger.profile.v1';
+function loadProfile() {
+  const base = { unlocks: {}, ledger: 0, wins: 0 };
+  try { return Object.assign(base, JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}')); } catch (e) { return base; }
+}
+function saveProfile(p) { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch (e) { /* storage unavailable */ } }
+const UNLOCK_NAMES = { brawl: 'Brawler cards', seer: 'Veil-seer cards', martha: 'Martha Wheeler', agnes: 'Sister Agnes' };
+/** Unlock something for future runs; returns its name if it's new. */
+function unlock(key) {
+  const p = loadProfile();
+  if (p.unlocks[key]) return null;
+  p.unlocks[key] = true;
+  saveProfile(p);
+  toast(`Unlocked: ${UNLOCK_NAMES[key]}${key === 'brawl' || key === 'seer' ? ' (in future card rewards)' : ' (a new hunter)'}`);
+  return UNLOCK_NAMES[key];
+}
+function unlockAfterBoss(ch) { if (ch === 1) unlock('brawl'); if (ch === 2) unlock('seer'); }
+function unlockAfterWin(run) {
+  const got = [];
+  const m = unlock('martha'); if (m) got.push(m);
+  const p = loadProfile();
+  p.wins++;
+  if (run.ledger === p.ledger && p.ledger < LEDGER.length - 1) { p.ledger++; got.push(`the Ledger: ${LEDGER[p.ledger].name}`); }
+  saveProfile(p);
+  return got.length ? 'Unlocked: ' + got.join(', ') + '.' : '';
+}
+function campHeal(r) { return Math.floor(r.maxHp * (r.ledger >= 3 ? 0.2 : 0.3)); }
+function toast(text) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = text;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
 function saveRun() { try { if (S.run) localStorage.setItem(SAVE_KEY, JSON.stringify(S.run)); } catch (e) { /* storage unavailable */ } }
 function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage unavailable */ } }
 function loadSave() {
@@ -610,8 +715,8 @@ function continueRun() {
 
 function showChapterIntro() {
   const r = S.run;
-  const ci = CHAPTER_INTROS[r.chapter];
-  r.addJournal(ci.letter.from === 'unsigned' ? 'A Card on Clara\'s Grave' : `Letter from ${ci.letter.from}`, ci.letter.text);
+  const ci = ST().chapter(r.chapter);
+  r.addJournal(ci.letter.from === 'unsigned' ? `An Unsigned Card (${CHAPTERS[r.chapter].title.split(' — ')[0]})` : `Letter from ${ci.letter.from}`, ci.letter.text);
   setScreen('chapterIntro');
 }
 
@@ -628,7 +733,7 @@ function showJournal() {
 
 function leaveNode() {
   S.flash = '';
-  S.run.advance();
+  S.run.advance(S.nodeIdx);
   setScreen('map');
 }
 
@@ -667,17 +772,20 @@ function winFight() {
   const tonic = found && r.gainTonic(found) ? found : null;
   const tonicLost = found && !tonic ? found : null;
   if (kind === 'boss') {
-    keepsake = ENCOUNTERS[r.chapter].boss.reward;
+    const b = ST().boss(r.chapter);
+    keepsake = b.reward === undefined ? null : b.reward === null && r.chapter < 3 ? r.randomKeepsake() : b.reward;
     if (keepsake) r.gainKeepsake(keepsake);
+    S.bossKeepsake = keepsake;
+    unlockAfterBoss(r.chapter);
   }
   AUDIO.sfx('coin', 0.3);
-  if (kind === 'boss') r.addJournal(`${kinName(ENCOUNTERS[r.chapter].boss.kin)}`, ENCOUNTERS[r.chapter].boss.after);
+  if (kind === 'boss') r.addJournal(ST().boss(r.chapter).rest || ST().boss(r.chapter).guise, ST().boss(r.chapter).after);
   if (kind === 'boss' && r.chapter === 3) { setScreen('finale'); return; }
   S.reward = {
     title: kind === 'boss' ? 'Vengeance' : kind === 'elite' ? 'Bounty Collected' : 'Back Through the Veil',
     clean,
     text: kind === 'boss' ? '' : kind === 'normal' && S.guilt ? `The town buries ${S.guilt} in the morning. You do not stay for it.`
-      : kind === 'normal' ? pick(r.rng, THANKS) : 'The Between lets go of you. The street is just a street again.',
+      : kind === 'normal' ? T(pick(r.rng, THANKS)) : 'The Between lets go of you. The street is just a street again.',
     gold, keepsake, tonic, tonicLost, freed,
     cards: r.cardChoices(3, kind === 'elite' ? 0.1 : kind === 'boss' ? 0.3 : 0),
     cardTaken: null,
@@ -1044,7 +1152,8 @@ function howToPlay() {
   openModal(`
     <h3>How to Play</h3>
     <div class="how">
-      <p><b>The hunt.</b> Ride from town to town across three chapters. At the end of each one waits the demon who killed one of your family.</p>
+      <p><b>The hunt.</b> Three chapters, each with its own map. Pick your route stop by stop: towns, wanted posters, campfires, trading posts, trail events and one story stop per chapter. At the end of each map waits one of the three demons behind it all.</p>
+      <p><b>Hunters and the Ledger.</b> Jonah Crane rides first. Finish the hunt to unlock Martha Wheeler; tell Sister Agnes the truth to unlock her. Beat the Hollow Steer and the Silk Widow to add Brawler and Veil-seer cards to future rewards. Win on the hardest Ledger page you have and the next page opens, each one harder than the last.</p>
       <p><b>Towns.</b> Somebody vanished last night, and one of the three strangers is a demon. You get a few questions: ask where they were, what they saw, or just watch them. Humans tell the truth. The demon lies, and it will try to frame someone. Or spend <b>Veil Sight</b> ${ART.eye(true)} to look through a stranger's skin and know for sure. Solve it without the Veil and the bounty is bigger. Draw on the demon and it starts <b>Exposed</b>. Draw on an innocent and you carry a curse card, and the real demon strikes first.</p>
       <p><b>Your iron.</b> Each of the six chambers holds a round: Lead, Silver, Hellfire, Blessed or Buckshot. Shot cards fire the next loaded round, and its effect rides on that shot. Your <b>Gun Belt</b> is how the gun is loaded at the start of every fight and what Reload puts back. Buy special rounds at trading posts and arrange them in the order you want them.</p>
       <p><b>The Between.</b> Every fight happens in the Between: the same town, only wrong.</p>
@@ -1081,6 +1190,9 @@ function eventApi() {
 // ---------------------------------------------------------------------------
 const ACTIONS = {
   'new-run': newRun,
+  'setup': () => { S.setupHero = S.setupHero || 'jonah'; setScreen('setup'); },
+  'pick-hero': el => { S.setupHero = el.dataset.id; render(); },
+  'pick-ledger': el => { S.setupLedger = +el.dataset.i; render(); },
   'title': () => { S.run = null; setScreen('title'); },
   'how': howToPlay,
   'to-map': () => setScreen('map'),
@@ -1090,7 +1202,13 @@ const ACTIONS = {
   'toggle-sfx': () => { AUDIO.unlock(); AUDIO.toggle('sfx'); render(); },
   'toggle-voice': () => { AUDIO.toggle('voice'); render(); },
   'voice': el => AUDIO.voice(el.dataset.id, 0),
-  'ending': el => { S.endingId = el.dataset.id; S.run.addJournal(ENDINGS[S.endingId].title, ENDINGS[S.endingId].text[0]); setScreen('victory'); },
+  'ending': el => {
+    S.endingId = el.dataset.id;
+    const e = ST().endings[S.endingId];
+    S.run.addJournal(e.title, e.text[0]);
+    S.unlockNote = unlockAfterWin(S.run);
+    setScreen('victory');
+  },
   'view-deck': () => showCards(`Your deck (${S.run.deck.length})`, S.run.deck, false),
   'view-pile': el => {
     const c = S.combat; const pile = el.dataset.pile;
@@ -1146,7 +1264,7 @@ const ACTIONS = {
   },
   'leave-town': () => { S.cleanSolve = false; S.run.addInfamy(1); startFight(S.town.enc.foes, 'normal', { ambushed: true }); },
   'fight-elite': () => startFight(ENCOUNTERS[S.run.chapter].elite.foes, 'elite'),
-  'fight-boss': () => startFight(ENCOUNTERS[S.run.chapter].boss.foes, 'boss'),
+  'fight-boss': () => startFight(ST().boss(S.run.chapter).foes, 'boss'),
 
   // combat
   'card': el => clickCard(+el.dataset.i),
@@ -1184,14 +1302,14 @@ const ACTIONS = {
       setScreen('chapterEnd');
     } else leaveNode();
   },
-  'next-chapter': () => { S.run.advance(); S.run.sight = S.run.maxSight; showChapterIntro(); },
+  'next-chapter': () => { S.run.advance(S.nodeIdx); S.run.sight = S.run.maxSight; showChapterIntro(); },
 
   // camp
   'rest': () => {
-    const r = S.run; const heal = Math.floor(r.maxHp * 0.3);
+    const r = S.run; const heal = campHeal(r);
     r.hp = Math.min(r.maxHp, r.hp + heal);
     AUDIO.sfx('heal');
-    S.flash = 'You sleep with your hat over your eyes and your hand on your iron. You dream of Clara laughing.';
+    S.flash = ST().restFlash;
     S.campDone = true; render();
   },
   'clean-iron': () => {
@@ -1277,6 +1395,7 @@ const ACTIONS = {
     if (o.req && !o.req(S.run)) return;
     S.eventResult = o.run(S.run, eventApi());
     S.run.hp = Math.min(S.run.hp, S.run.maxHp);
+    if (S.run.flags.confessed) unlock('agnes');
     render();
   },
 };

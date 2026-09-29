@@ -49,8 +49,8 @@ function fight(run, foes, opts) {
 }
 
 const bossHp = { 1: [], 2: [], 3: [] };
-function playRun(seed) {
-  const run = new Run(seed);
+function playRun(seed, opts = { styles: ['brawl', 'seer'] }) {
+  const run = new Run(seed, opts);
   const api = {
     rand: run.rng,
     gainCard: (id, up) => run.addCard(id, up),
@@ -73,10 +73,10 @@ function playRun(seed) {
       won = fight(run, ENCOUNTERS[run.chapter].elite.foes, {});
       if (won) { run.afterFight(); run.gainKeepsake(run.randomKeepsake()); run.gainTonic(run.tonicReward('elite')); pickReward(run, run.cardChoices(3, 0.1)); }
     } else if (ch.type === 'boss') {
-      const b = ENCOUNTERS[run.chapter].boss;
+      const b = storyFor(run.hero).boss(run.chapter);
       bossHp[run.chapter].push(run.hp / run.maxHp);
       won = fight(run, b.foes, {});
-      if (won) { run.afterFight(); run.gainKeepsake(b.reward); run.hp = run.maxHp; }
+      if (won) { run.afterFight(); run.gainKeepsake(b.reward === null && run.chapter < 3 ? run.randomKeepsake() : b.reward); run.hp = run.maxHp; }
     } else if (ch.type === 'camp') {
       if (run.hp < run.maxHp * 0.75) run.hp = Math.min(run.maxHp, run.hp + Math.floor(run.maxHp * 0.3));
       else api.upgradeCardPrompt();
@@ -85,19 +85,20 @@ function playRun(seed) {
       const shop = run.makeShop();
       const c = shop.cards.find(x => x.price <= run.gold); if (c) { run.gold -= c.price; run.addCard(c.id); }
     } else if (ch.type === 'story') {
-      const ev = STORY_EVENTS[run.chapter];
+      const ev = storyFor(run.hero).story(run.chapter);
       const opts = ev.options.filter(o => !o.req || o.req(run));
       assert(typeof opts[Math.floor(run.rng() * opts.length)].run(run, api) === 'string');
       assert(run.journal.length > 0, 'story event should add a journal entry');
     } else if (ch.type === 'trail') {
-      const ev = EVENTS[Math.floor(run.rng() * EVENTS.length)];
+      const evs = EVENTS.filter(e => !e.jonahOnly || run.hero === 'jonah');
+      const ev = evs[Math.floor(run.rng() * evs.length)];
       const opts = ev.options.filter(o => !o.req || o.req(run));
       const txt = opts[0].run(run, api);
       assert(typeof txt === 'string');
     }
     assert(run.hp <= run.maxHp, 'hp above max');
     if (!won) return { win: false, chapter: run.chapter, step: run.step };
-    run.advance();
+    run.advance(ch.idx);
   }
   return { win: true, chapter: 4 };
 }
@@ -128,7 +129,8 @@ function suspects(town) {
 
 const N = +process.argv[2] || 300;
 const results = [];
-for (let i = 0; i < N; i++) results.push(playRun(i + 1));
+const HUNTERS = Object.keys(HEROES);
+for (let i = 0; i < N; i++) results.push(playRun(i + 1, { hero: HUNTERS[i % HUNTERS.length], styles: ['brawl', 'seer'] }));
 const wins = results.filter(r => r.win).length;
 const byCh = [1, 2, 3].map(ch => results.filter(r => !r.win && r.chapter === ch).length);
 console.log(`runs=${N} wins=${wins} (${(100 * wins / N).toFixed(1)}%)  deaths by chapter: I=${byCh[0]} II=${byCh[1]} III=${byCh[2]}`);

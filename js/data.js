@@ -63,6 +63,13 @@ const CARDS = {
     play: (c, v, t) => { c.hit(t, v.dmg); c.apply(t, 'shaken', v.sh); },
   },
 
+  scattergun: {
+    name: 'Scattergun', type: 'attack', rarity: 'starter', cost: 1, rounds: 1, target: 'all',
+    v: { dmg: 6 }, up: { dmg: 8 },
+    text: v => `Deal ${v.dmg} damage to ALL foes.`,
+    play: (c, v) => c.hitAll(v.dmg),
+  },
+
   // ---- Common ------------------------------------------------------------
   fan_hammer: {
     name: 'Fan the Hammer', type: 'attack', rarity: 'common', cost: 1, rounds: 'all', target: 'enemy',
@@ -343,6 +350,113 @@ const CARDS = {
     play: (c, v, t) => c.hit(t, v.dmg + v.per * ((t && t.st.burn) || 0)),
   },
 
+  // ---- Brawler: fists, Wrath, and getting hurt on purpose -------------------
+  haymaker: {
+    name: 'Haymaker', type: 'attack', rarity: 'common', cost: 2, target: 'enemy', style: 'brawl',
+    v: { dmg: 15 }, up: { dmg: 20 },
+    text: v => `Deal ${v.dmg} damage.`,
+    play: (c, v, t) => c.hit(t, v.dmg),
+  },
+  knuckle_duster: {
+    name: 'Knuckle Duster', type: 'attack', rarity: 'common', cost: 1, target: 'enemy', style: 'brawl',
+    v: { dmg: 6, w: 1 }, up: { dmg: 8, w: 1 },
+    text: v => `Deal ${v.dmg} damage. Gain ${v.w} Wrath.`,
+    play: (c, v, t) => { c.hit(t, v.dmg); c.applySelf('wrath', v.w); },
+  },
+  chair_leg: {
+    name: 'Chair Leg', type: 'attack', rarity: 'common', cost: 1, target: 'all', style: 'brawl',
+    v: { dmg: 5 }, up: { dmg: 8 },
+    text: v => `Deal ${v.dmg} damage to ALL foes.`,
+    play: (c, v) => c.hitAll(v.dmg),
+  },
+  take_a_punch: {
+    name: 'Take a Punch', type: 'skill', rarity: 'common', cost: 0, style: 'brawl',
+    v: { self: 3, grit: 2 }, up: { self: 2, grit: 2 },
+    text: v => `Lose ${v.self} HP. Gain ${v.grit} Grit.`,
+    play: (c, v) => { c.loseHp(c.p, v.self); c.gainGrit(v.grit); },
+  },
+  bloodied: {
+    name: 'Bloodied', type: 'attack', rarity: 'uncommon', cost: 1, target: 'enemy', style: 'brawl',
+    v: { dmg: 5, per: 4 }, up: { dmg: 7, per: 3 },
+    text: v => `Deal ${v.dmg} damage, plus 1 for every ${v.per} HP you're missing.`,
+    play: (c, v, t) => c.hit(t, v.dmg + Math.floor((c.p.maxHp - c.p.hp) / v.per)),
+  },
+  red_mist: {
+    name: 'Red Mist', type: 'skill', rarity: 'uncommon', cost: 1, style: 'brawl',
+    v: { w: 2, self: 4 }, up: { w: 3, self: 4 },
+    text: v => `Gain ${v.w} Wrath. Lose ${v.self} HP.`,
+    play: (c, v) => { c.applySelf('wrath', v.w); c.loseHp(c.p, v.self); },
+  },
+  scar_tissue: {
+    name: 'Scar Tissue', type: 'power', rarity: 'uncommon', cost: 1, style: 'brawl',
+    v: { cov: 2 }, up: { cov: 3 },
+    text: v => `Whenever you lose HP, gain ${v.cov} Cover.`,
+    play: (c, v) => c.power('scar_tissue', v.cov),
+  },
+  bare_knuckle: {
+    name: 'Bare-Knuckle Rules', type: 'power', rarity: 'rare', cost: 2, style: 'brawl',
+    v: { dmg: 4 }, up: { dmg: 6 },
+    text: v => `Attacks that don't fire rounds deal ${v.dmg} extra damage.`,
+    play: (c, v) => c.power('bare_knuckle', v.dmg),
+  },
+  last_stand: {
+    name: 'Last Stand', type: 'attack', rarity: 'rare', cost: 2, target: 'enemy', style: 'brawl',
+    v: { dmg: 30 }, up: { dmg: 40 },
+    req: c => c.p.hp * 2 < c.p.maxHp, reqWhy: 'Only below half HP',
+    text: v => `Only playable below half HP. Deal ${v.dmg} damage.`,
+    play: (c, v, t) => c.hit(t, v.dmg),
+  },
+
+  // ---- Veil-seer: Exposed, Sight, and seeing what comes ---------------------
+  glimpse: {
+    name: 'Glimpse', type: 'skill', rarity: 'common', cost: 0, target: 'enemy', style: 'seer',
+    v: { ex: 1, draw: 1 }, up: { ex: 2, draw: 1 },
+    text: v => `Apply ${v.ex} Exposed. Draw ${v.draw}.`,
+    play: (c, v, t) => { c.apply(t, 'exposed', v.ex); c.draw(v.draw); },
+  },
+  third_eye: {
+    name: 'Third Eye', type: 'skill', rarity: 'common', cost: 1, style: 'seer',
+    v: { cov: 6, more: 5 }, up: { cov: 8, more: 6 },
+    text: v => `Gain ${v.cov} Cover. If any foe means to attack, gain ${v.more} more.`,
+    play: (c, v) => c.cover(v.cov + (c.alive().some(e => e.intent && e.intent.atk) ? v.more : 0)),
+  },
+  tear_veil: {
+    name: 'Tear the Veil', type: 'attack', rarity: 'common', cost: 1, target: 'enemy', style: 'seer',
+    v: { dmg: 7 }, up: { dmg: 10 },
+    text: v => `Deal ${v.dmg} damage. Double it if the foe is Exposed.`,
+    play: (c, v, t) => c.hit(t, t && t.st.exposed ? v.dmg * 2 : v.dmg),
+  },
+  peel_skin: {
+    name: 'Peel the Skin', type: 'skill', rarity: 'uncommon', cost: 1, target: 'enemy', style: 'seer',
+    v: { ex: 1 }, up: { ex: 2, cost: 0 },
+    text: v => `Strip the foe's Cover and Ward. Apply ${v.ex} Exposed.`,
+    play: (c, v, t) => { if (t) { t.block = 0; delete t.st.ward; } c.apply(t, 'exposed', v.ex); },
+  },
+  second_sight: {
+    name: 'Second Sight', type: 'skill', rarity: 'uncommon', cost: 1, style: 'seer', exhaust: true,
+    v: { draw: 1 }, up: { draw: 2 },
+    text: v => `Restore 1 Veil Sight. Draw ${v.draw}. Exhaust.`,
+    play: (c, v) => { c.run.sight = Math.min(c.run.maxSight, c.run.sight + 1); c.draw(v.draw); },
+  },
+  veil_walk: {
+    name: 'Veil Walk', type: 'skill', rarity: 'uncommon', cost: 1, style: 'seer',
+    v: { cov: 8, draw: 1 }, up: { cov: 11, draw: 1 },
+    text: v => `Gain ${v.cov} Cover. Draw ${v.draw}.`,
+    play: (c, v) => { c.cover(v.cov); c.draw(v.draw); },
+  },
+  true_name: {
+    name: 'Its True Name', type: 'attack', rarity: 'rare', cost: 2, target: 'enemy', style: 'seer',
+    v: { per: 8 }, up: { per: 11 },
+    text: v => `Deal ${v.per} damage for each Exposed on the foe.`,
+    play: (c, v, t) => c.hit(t, v.per * ((t && t.st.exposed) || 0)),
+  },
+  clairvoyance: {
+    name: 'Clairvoyance', type: 'power', rarity: 'rare', cost: 1, style: 'seer',
+    v: { ex: 1 }, up: { ex: 1, cost: 0 },
+    text: v => `At the start of each turn, apply ${v.ex} Exposed to a random foe.`,
+    play: (c, v) => c.power('clairvoyance', v.ex),
+  },
+
   // ---- Curses ------------------------------------------------------------
   blood_on_hands: {
     name: 'Blood on Your Hands', type: 'curse', rarity: 'curse', cost: null, unplayable: true,
@@ -449,6 +563,54 @@ const STARTER_DECK = [
 ];
 
 // ---------------------------------------------------------------------------
+// HUNTERS — who you ride out as. Jonah is the story as written; the others
+// are unlocked by what you do in it.
+// ---------------------------------------------------------------------------
+const HEROES = {
+  jonah: {
+    name: 'Jonah Crane', title: 'Marshal', art: 'hero', hp: 70, sight: 3, questions: 0,
+    deck: STARTER_DECK, keepsakes: ['tin_star', 'claras_locket'],
+    belt: ['lead', 'lead', 'silver', 'lead', 'lead', 'lead'], tonics: ['miracle'],
+    blurb: 'Former marshal. Lost his brother, his sister and his wife in a single week. Sees through the Veil. Balanced: a revolver, a tin star and a grudge.',
+  },
+  martha: {
+    name: 'Martha Wheeler', title: 'Mrs. Wheeler', art: 'martha', hp: 76, sight: 2, questions: 2,
+    deck: ['scattergun', 'scattergun', 'scattergun', 'quick_draw', 'quick_draw', 'quick_draw', 'duck_roll', 'take_cover', 'take_cover', 'take_cover', 'reload'],
+    keepsakes: ['eli_ring', 'war_paint'],
+    belt: ['buckshot', 'lead', 'lead', 'buckshot', 'lead', 'lead'], tonics: ['laudanum'],
+    blurb: 'Widow of the man Marshal Crane hanged. A shotgun, Buckshot in her belt, and less Veil Sight, but she knows how people lie: two extra questions in every town.',
+    unlock: { key: 'martha', text: 'Finish the hunt once, with any ending.' },
+  },
+  agnes: {
+    name: 'Sister Agnes', title: 'Sister', art: 'agnes', hp: 58, sight: 4, questions: 0,
+    deck: ['quick_draw', 'quick_draw', 'quick_draw', 'holy_water', 'sermon_fire', 'take_cover', 'take_cover', 'take_cover', 'rosary_prayer', 'reload', 'pistol_whip'],
+    keepsakes: ['psalter', 'tin_star'],
+    belt: ['blessed', 'lead', 'lead', 'blessed', 'lead', 'lead'], tonics: ['holy_vial'],
+    blurb: 'The Coldwater nun Ruth confided in. Frail, but she sees clearly (4 Veil Sight) and her Hellfire burns hotter. Blessed rounds in her belt.',
+    unlock: { key: 'agnes', text: 'Tell Sister Agnes the truth.' },
+  },
+};
+
+// Card styles that start locked, and what unlocks them.
+const STYLE_UNLOCKS = {
+  brawl: { name: 'Brawler cards', text: 'Beat the Hollow Steer.' },
+  seer: { name: 'Veil-seer cards', text: 'Beat the Silk Widow.' },
+};
+
+// ---------------------------------------------------------------------------
+// THE LEDGER — difficulty. Each page adds to the ones before it. Winning on
+// the highest page you have unlocked opens the next.
+// ---------------------------------------------------------------------------
+const LEDGER = [
+  { name: 'The Hunt', desc: 'The story as written.' },
+  { name: 'Page One', desc: 'Demons have 10% more HP.' },
+  { name: 'Page Two', desc: 'Demons hit 10% harder.' },
+  { name: 'Page Three', desc: 'Towns answer one fewer question. Campfires heal 20% instead of 30%.' },
+  { name: 'Page Four', desc: 'Elites and bosses start every fight with 2 Wrath.' },
+  { name: 'The Last Page', desc: 'You start with a Grief in your deck and one less Veil Sight.' },
+];
+
+// ---------------------------------------------------------------------------
 // KEEPSAKES (relics)
 // ---------------------------------------------------------------------------
 const KEEPSAKES = {
@@ -472,6 +634,8 @@ const KEEPSAKES = {
   bible: { name: "Grandpa's Bible", desc: 'Raise max HP by 12 when found. A bullet hole through Revelation.' },
   horseshoe: { name: 'Lucky Horseshoe', desc: 'Collect 15 extra gold after every fight.' },
   war_paint: { name: 'Cinder War Paint', desc: 'Start each fight with 1 Wrath.' },
+  eli_ring: { name: "Eli's Wedding Band", desc: 'Your Buckshot rounds splash 5 damage instead of 3.', hero: true },
+  psalter: { name: "Agnes's Psalter", desc: 'Whenever you apply Hellfire to a demon, apply 1 more.', hero: true },
   lawmans_notebook: { name: "Lawman's Notebook", desc: 'Ask 2 extra questions in every town. Your old handwriting, from when you still did things by the book.' },
 };
 const KEEPSAKE_POOL = ['snake_oil', 'silver_spurs', 'gun_oil', 'rattle', 'bible', 'horseshoe', 'war_paint', 'lawmans_notebook'];
@@ -835,7 +999,7 @@ const EVENTS = [
     ],
   },
   {
-    id: 'clara_dream',
+    id: 'clara_dream', jonahOnly: true,
     title: 'Campfire Dream',
     text: 'You doze by the fire and Clara is sitting across from you, mending your shirt like she used to. "Jonah," she says. "You could stop. You could just stop."',
     options: [
@@ -1114,7 +1278,184 @@ const THANKS = [
   '"You\'re the one hunting them," a woman whispers. "God keep you, Marshal."',
 ];
 
+// ---------------------------------------------------------------------------
+// OTHER HUNTERS' STORIES — the same three demons, seen by someone else.
+// storyFor(hero) returns one bundle for any hunter; Jonah's is assembled from
+// the tables above so nothing is written twice.
+// ---------------------------------------------------------------------------
+const CHAR_STORY = {
+  martha: {
+    intro: [
+      'Six years ago Marshal Jonah Crane hanged your husband, Eli Wheeler, from the cottonwood at the foot of Babel Mesa. There was no trial. There was a stranger in a grey suit who said Eli was the Cinder County Butcher, and a marshal tired enough to believe him.',
+      'The killings stopped. Everybody said that proved it. You knew better. Eli cried at weddings. Eli caught spiders in a teacup and carried them outside.',
+      "Last spring you finally saw what nobody else can: the things that walk the frontier wearing people. Three of them built the rope that hanged Eli. A cattle baron who planted the evidence. A saloon madam who swore to a lie. And the Gentleman in Grey, who did the killing himself.",
+      "You took Eli's shotgun down from over the door. You are going to clear his name, one skin at a time.",
+    ],
+    hunt: { 1: 'Hunting the man who planted the evidence.', 2: 'Hunting the woman who swore to the lie.', 3: 'Hunting the killer who got away with it.' },
+    chapters: {
+      1: { letter: { from: 'Eli Wheeler', text: "Martha. They say I'll hang Thursday. The Marshal is not a cruel man, only a tired one. Mr. Pike swears he found my coat by the stockyard, soaked through. It isn't my coat, Martha. Mine has your patch on the elbow. Don't let them tell you different. Water the tomatoes. Eli." },
+        paras: ['Eli wrote that the night before they hanged him. The Marshal never read it. Nobody did.', 'Dry Hollow is cattle country, and every cow in it belongs to Silas Pike, the man who found the coat.'] },
+      2: { letter: { from: 'Madame Odile', text: 'I, Odile Vasseur, proprietress of the Gilded Lily, Coldwater, do swear that on the night of the ninth I saw the drifter Eli Wheeler lead two children toward the dry wash. So help me God.' },
+        paras: ['The court clerk sold you a copy of her statement for a dollar. Madame Odile signed it in a hand like no hand you have ever seen, all loops and no pressure.', 'Coldwater sits at the bottom of a canyon where the sun comes up late and leaves early.'] },
+      3: { letter: { from: 'unsigned', text: 'Mrs. Wheeler. I was so sorry to hear about Eli. Truly. Come up to Babel Mesa and I will tell you everything you want to know about that night. I was there, after all. Cordially, G.' },
+        paras: ['The card was tucked into your front door. Somebody had watered the tomatoes.', 'Marshal Crane is somewhere near the mesa too. You have not decided what you will do about him.'] },
+    },
+    bosses: {
+      1: { cry: 'For Eli.', rest: 'One lie down.', reward: null,
+        before: "Silas Pike swore on a stack of Bibles that he found Eli's coat in his stockyard, soaked in blood. It was a steer's blood, and it was not Eli's coat. Pike has been buying up land ever since with money nobody can account for.",
+        taunt: '"Wheeler? Can\'t say I recall," says Silas Pike, and his jaw swings open like a gate. "Hanged a lot of men that summer."',
+        last: '"The Gentleman paid me in land," the Steer gurgles as it burns. "Paid Odile in years. What do you suppose he\'ll pay you?"',
+        after: "The Steer comes apart into smoke and flies. In Pike's office safe you find the coat: bloodstained, the wrong size, a price tag from the Dry Hollow mercantile still on the collar. You fold it carefully. It is evidence." },
+      2: { cry: 'For Eli.', rest: 'Two lies down.', reward: null,
+        before: 'Madame Odile swore to a lie in open court and has sworn to it every year since, to anyone who asks. She has not aged a day in six years.',
+        taunt: '"I remember your Eli," says Madame Odile. "He cried for you at the end. It was very sweet. Stay a while, Mrs. Wheeler. I will tell you what he said."',
+        last: '"He paid me in years," the Widow hisses. "Ask him what he paid the Marshal in." Then she comes apart.',
+        after: 'The Widow unravels, thread by thread. In the silk you find her sworn statement, the original, and the ink is still wet. You watch the words crawl off the page like ants.' },
+      3: { cry: 'For Eli.', rest: '', reward: null,
+        before: 'The Gentleman in Grey is waiting at the top of Babel Mesa, in a suit that never gets dusty. He has been waiting six years for you, he says. He sounds pleased.',
+        taunt: '"Mrs. Wheeler. You look well." He does not get up. "Your husband was very useful. A marshal needed a killer, and Eli was there. I only had to point." He smiles. "One rope, and the Marshal owed me everything he loved. I call that a bargain."',
+        last: '',
+        after: "The Gentleman folds into himself like a letter and burns. For a moment you smell Eli's pipe tobacco on the wind, and then it is only the wind." },
+    },
+    story: {
+      1: { id: 'pikes_ledger', title: "Pike's Ledger", kicker: 'Eli',
+        text: 'Pike\'s land office is empty after dark. In the bottom drawer of the desk is a ledger, and on the page for the summer Eli died is a single line in a hand like spilled ink: "Wheeler matter. Paid in full, 640 acres."',
+        options: [
+          { label: 'Take the ledger as evidence.', run: (r, api) => { r.flags.evidence = (r.flags.evidence || 0) + 1; r.addJournal('Paid in Full', 'Pike\'s ledger, the summer Eli died: "Wheeler matter. Paid in full, 640 acres." You have it now.'); api.gainCard('buckshot'); return 'You wrap the ledger in oilcloth and put it at the bottom of your saddlebag. (Evidence: 1. Gain Buckshot.)'; } },
+          { label: 'Take the cash box and burn the office.', run: (r, api) => { r.gold += 45; r.addInfamy(1); r.addJournal('Fire in Dry Hollow', 'You burned Silas Pike\'s land office to the ground, ledger and all. It felt good. It proves nothing.'); return 'The cash box has forty-five dollars in it. The office burns until dawn. (Gain 45 gold. More Infamy.)'; } },
+        ] },
+      2: { id: 'pruitt_girl', title: 'The Pruitt Girl', kicker: 'Eli',
+        text: 'The Pruitt children were the ones Madame Odile swore she saw with Eli. One of them lived. She is nineteen now and works the laundry behind the Gilded Lily. "I never saw your husband," she whispers. "Not ever. The lady told me what to say. She gave me a sugar mouse."',
+        options: [
+          { label: 'Ask her to swear to it in writing.', run: (r, api) => { r.flags.evidence = (r.flags.evidence || 0) + 1; r.addJournal("The Pruitt Girl's Statement", '"I never saw Eli Wheeler with me or my brother. Madame Odile told me what to say." Signed, with an X, and witnessed.'); api.gainCard('last_bullet'); return 'She signs with an X. Her hand shakes the whole time. (Evidence: 1 more. Gain The Last Bullet.)'; } },
+          { label: 'Tell her it was never her fault.', run: r => { r.hp = Math.min(r.maxHp, r.hp + 15); r.addJournal('Sugar Mouse', 'You told the Pruitt girl it was never her fault. She cried, and so did you, a little.'); return 'She cries. So do you, a little. (Heal 15.)'; } },
+        ] },
+      3: { id: 'the_marshal', title: 'The Marshal', kicker: 'Eli',
+        text: 'Under the cottonwood at the foot of Babel Mesa, a tired man in a long duster is sitting where you usually sit. He stands when he sees you. It is Jonah Crane. "Mrs. Wheeler," he says. "I know what I did. I know who I did it for. I don\'t expect anything from you."',
+        options: [
+          { label: 'Forgive him.', run: r => { r.flags.forgiven = true; r.addInfamy(-1); r.hp = r.maxHp; r.addJournal('Forgiveness', 'You forgave Jonah Crane under the tree where he hanged your husband. You are not sure you meant it. You said it anyway, and something in your chest came unknotted.'); return 'You say it before you can stop yourself. He takes off his hat and does not say anything at all. (Health fully restored.)'; } },
+          { label: '"Then help me finish it."', run: (r, api) => { r.flags.ally = true; r.addJournal('An Unlikely Posse', 'Jonah Crane gave you a box of his silver rounds and told you where the Gentleman sleeps.'); api.gainCard('judgment', true); r.gainTonic('silver_box'); return 'He gives you a box of silver rounds and tells you where the Gentleman sleeps. (Gain an upgraded Judgment and a Box of Silver.)'; } },
+          { label: 'Walk past him.', run: r => { r.addJournal('Walking Past', 'You walked past Jonah Crane without a word. He did not follow.'); r.gold += 30; return 'He does not follow. Later you find thirty dollars in your saddlebag that you did not put there. (Gain 30 gold.)'; } },
+        ] },
+    },
+    finale: [
+      "The Gentleman in Grey lies in the red dust of the Between. His hat has rolled away. Under it there is only a ledger bound in black leather, and on its first page is Eli's name, crossed out, with PAID written beside it. He is still smiling.",
+      '"Well played, Mrs. Wheeler. Here is the trouble. Someone has to keep the books. Put me down and the Veil stays open in your eyes forever. Or pick up the hat, and you may write whatever you like in here. Even a pardon."',
+    ],
+    rest: { req: r => r.flags.forgiven || (r.flags.evidence || 0) >= 2, locked: 'You would need proof Eli was innocent, or to have forgiven the man who hanged him.' },
+    endings: {
+      hunter: { title: 'The Widow with the Shotgun', text: ['You put both barrels through the ledger.', "Eli's headstone still has MURDERER scratched into it. You leave it. You know the truth. That will have to be enough.", "The Veil stays open. You keep Eli's shotgun oiled, and you keep riding."] },
+      rest: { title: 'Pardoned', text: ["You tear the ledger out of him and carry it down the mesa. In the morning you lay it on the circuit judge's desk with everything else you found.", 'It takes the territory eleven months to admit a mistake. The pardon comes on thick paper with a wax seal. You nail it to the cottonwood.', 'The Sight fades. You plant tomatoes. Some evenings a tired man in a long duster rides past and tips his hat, and some evenings you nod back.'] },
+      collector: { title: 'The Lady in Grey', text: ['You pick up the grey hat. It fits.', 'You write a pardon for Eli in the ledger, in beautiful handwriting. Then you turn the page. There are so many other names.', 'Somewhere in the territory a tired marshal is hunting a killer he cannot catch. You straighten your gloves and go to buy him a drink.'] },
+    },
+    memories: [
+      'Eli catching a spider in a teacup and carrying it out to the porch, talking to it the whole way.',
+      'Eli sewing a patch on his own elbow, badly, because he did not want to bother you.',
+      'The first tomato of the summer, split between the two of you with a pocketknife.',
+      'Eli teaching the Pruitt children to whistle through a blade of grass, the week before.',
+      'The cottonwood creaking in the wind. You still cannot sleep through it.',
+      "Eli's last letter, read so many times the folds have worn through.",
+    ],
+    restFlash: 'You sleep with the shotgun across your knees. You dream Eli is humming in the kitchen.',
+  },
+
+  agnes: {
+    intro: [
+      'You were the sister at the Coldwater chapel for eleven years. You buried miners and babies and a sheriff, and you never once saw anything you could not explain.',
+      "Then Ruth Crane came to sing in your choir. She had the finest voice in the territory and the saddest brother. One Sunday she did not come. The Gilded Lily said she had gone away. You held a funeral with an empty coffin, and at the graveside, God help you, you saw them.",
+      "Demons. In the pews. In the saloon. In the mayor's house. Wearing people like Sunday clothes.",
+      'The bishop told you to pray. You did. Then you took the revolver somebody left in the poor box and had it blessed by a priest who asked no questions.',
+    ],
+    hunt: { 1: 'Hunting the Steer of Dry Hollow.', 2: 'Hunting the thing that took Ruth.', 3: 'Hunting the one who keeps the ledger.' },
+    chapters: {
+      1: { letter: { from: 'Ruth Crane', text: "Sister. I've told Jonah nothing, he has enough to carry. But a man in a grey suit comes to the Lily every Saturday, and he knows things about my family no stranger should. He says my brother Amos is 'next in the ledger.' If anything happens to Amos, it was him. Pray for us. Ruth." },
+        paras: ['Amos Crane was trampled in the Dry Hollow stockyards a week after Ruth wrote that.', 'Dry Hollow is cattle country, and every cow in it belongs to Silas Pike.'] },
+      2: { letter: { from: 'Ruth Crane', text: "Sister, if you are reading this, I didn't come to choir. Madame Odile has asked me to sing for her alone tonight. I think I have to. I think if I don't, it will be Jonah. Don't let him come looking for me. He'll only get hurt. Your Ruth." },
+        paras: ['Ruth left this under the hymnals the Sunday she vanished. You have never shown it to anyone.', 'The Gilded Lily is lit up tonight. It is always lit up.'] },
+      3: { letter: { from: 'unsigned', text: "Sister Agnes. You have been praying very loudly. I hear everything, you know. Come up to Babel Mesa and we'll discuss your faith. I have always enjoyed a good theological argument. Cordially, G." },
+        paras: ['It was nailed to the chapel door. The nail was still hot.', 'You cross yourself, load the Blessed rounds, and ride.'] },
+    },
+    bosses: {
+      1: { cry: 'For Amos.', rest: 'Amos Crane can rest now.', reward: 'amos_harmonica',
+        before: "Silas Pike owns every cow in Dry Hollow and most of the men. Ruth's letter named his Sunday visitor. Amos Crane died in Pike's stockyard. You mean to find out why.",
+        taunt: '"A nun with a gun," says Silas Pike, and his jaw swings open like a gate. "Now I\'ve seen everything. Herd\'s hungry, Sister."',
+        last: '"He keeps a ledger," the Steer gurgles as it burns. "The Crane boy was just a page."',
+        after: "The Steer comes apart into smoke and flies. In the stockyard dust you find a battered harmonica. You will give it to Amos's brother, if you ever find him." },
+      2: { cry: 'For Ruth.', rest: 'Ruth can rest now.', reward: 'ruths_rosary',
+        before: "Madame Odile told the town Ruth had simply gone away. Ruth's note says otherwise. Tonight the Gilded Lily is full of music, and none of it is human.",
+        taunt: '"Sister!" says Madame Odile, delighted. "Ruth sang your hymns for me, right up until she couldn\'t. Shall I teach you the words?"',
+        last: '"You pray to someone who never answers," the Widow hisses. "He always answers." Then she comes apart.',
+        after: "The Widow unravels, thread by thread. Tangled in the silk you find Ruth's rosary, every bead still warm. You say all fifty-nine beads, kneeling in the ruin of the Gilded Lily." },
+      3: { cry: 'For all of them.', rest: '', reward: null,
+        before: 'The Gentleman in Grey is waiting at the top of Babel Mesa. He has been collecting souls in this territory for longer than there has been a territory, and he has always been very polite about it.',
+        taunt: '"Sister. You look tired." He does not get up. "You pray to someone who never answers. I always answer. Ask the Marshal. He asked me for one name, once, and look how generously he paid."',
+        last: '',
+        after: 'The Gentleman folds into himself like a letter and burns. The Between goes quiet, the way a church goes quiet after the last hymn.' },
+    },
+    story: {
+      1: { id: 'burned_mission', title: 'The Burned Mission', kicker: 'Amos',
+        text: 'The Dry Hollow mission burned the night after Amos Crane died. The padre is gone. The children who lived there are sleeping in Pike\'s barn now, and they will not stop staring at the cattle. "The cows talk," a little boy tells you. "At night. They say your name."',
+        options: [
+          { label: 'Bless the barn and stay the night.', run: (r, api) => { r.hp = Math.min(r.maxHp, r.hp + 12); api.gainCard('load_blessed'); r.addJournal('The Children in the Barn', 'You blessed Pike\'s barn and sat up all night with the mission children. The cattle did not talk. They only watched.'); return 'The cattle do not talk that night. They only watch. (Heal 12. Gain Load Blessed.)'; } },
+          { label: 'Ask the boy what else the cows say.', run: (r, api) => { r.flags.remembered = true; api.gainCard('glimpse'); r.addJournal('What the Cows Say', '"They say the Crane family is all in the ledger," the boy said. "They say the Marshal signed it himself."'); return '"They say the Crane family is all in the ledger," he says. "They say the Marshal signed it himself." (Gain Glimpse.)'; } },
+        ] },
+      2: { id: 'confessional', title: 'The Confessional', kicker: 'Ruth',
+        text: 'Someone is waiting in the Coldwater confessional. Through the grille you know the voice: Jonah Crane, Ruth\'s brother, who has not been inside a church in six years. "Sister," he says. "I need to tell someone what I did."',
+        options: [
+          { label: 'Hear his confession.', run: (r, api) => { r.flags.confessed = true; r.addInfamy(-2); r.hp = Math.min(r.maxHp, r.hp + 15); api.gainCard('last_rites'); r.addJournal('Confession', 'Jonah Crane confessed to you: the Butcher he could not catch, the polite man in grey who gave him a name, and Eli Wheeler, whom he hanged without a trial. You gave him absolution. You were not sure you had the right.'); return 'He tells you everything: the Butcher, the man in grey, Eli Wheeler, the rope. You give him absolution. You are not sure you have the right. (Heal 15. Gain Last Rites.)'; } },
+          { label: '"Find Ruth first. Confess after."', run: (r, api) => { api.gainCard('blood_oath'); r.addJournal('Not Yet', 'You sent Jonah Crane away from the confessional. You told yourself it was for Ruth.'); return 'He leaves without another word. You tell yourself it was for Ruth. (Gain Blood Oath.)'; } },
+        ] },
+      3: { id: 'widow_and_sister', title: 'The Widow Wheeler', kicker: 'Eli',
+        text: 'Martha Wheeler is sitting under the cottonwood at the foot of Babel Mesa. "You\'re the nun," she says. "The Marshal told you, didn\'t he. About Eli." She looks at your rosary. "Does God forgive a man for that?"',
+        options: [
+          { label: '"He does. The question is whether you can."', run: r => { r.flags.forgiven = true; r.hp = r.maxHp; r.addJournal('The Question', 'You told Martha Wheeler that God forgives. She asked whether she had to. You did not have an answer. She let you pray with her anyway.'); return 'She is quiet a long time. Then she lets you pray with her. (Health fully restored.)'; } },
+          { label: '"Ask the Gentleman. He wrote the ledger."', run: (r, api) => { api.gainCard('judgment', true); r.addJournal('The Ledger', 'You told Martha Wheeler the Gentleman wrote the ledger. She handed you a box of her husband\'s shells without a word.'); return 'She hands you a box of her husband\'s shells without a word. (Gain an upgraded Judgment.)'; } },
+        ] },
+    },
+    finale: [
+      'The Gentleman in Grey lies in the red dust of the Between. His hat has rolled away. Under it there is no face, only a ledger bound in black leather where a heart should be, full of names: Amos, Ruth, Clara, Eli, and thousands more. He is still smiling.',
+      '"Well played, Sister. Here is the trouble. Someone has to keep the books. Put me down and the Veil stays open in your eyes forever. Or pick up the hat, and you may decide who is saved. Isn\'t that what you always wanted?"',
+    ],
+    rest: { req: r => r.flags.confessed || r.flags.forgiven, locked: 'You would have to have heard a confession, or offered forgiveness.' },
+    endings: {
+      hunter: { title: 'The Riding Sister', text: ['You put a Blessed round through the ledger and say a prayer for whatever the Gentleman used to be.', 'The bishop asks for his revolver back. You tell him you lost it.', 'The Veil stays open. There are still things in the pews on Sunday. You keep Blessed rounds in the collection plate, where they are handy.'] },
+      rest: { title: 'Absolution', text: ['You tear the ledger out of him and read every name aloud, one by one, and at each name the page burns white. It takes all night.', 'When you reach the end, the Sight goes out of you like a candle.', 'You go back to Coldwater. The choir needs a soprano. On the first Sunday, a tired man in a long duster sits in the back pew and, for the first time in six years, sings.'] },
+      collector: { title: 'The Grey Sister', text: ['You pick up the grey hat. It fits.', 'You tell yourself you will only use it to save people. You tell yourself that for a long time.', 'The suit never gets dusty. The ledger never runs out of pages.'] },
+    },
+    memories: [
+      'Ruth hitting the high note in "Shall We Gather at the River" and the whole congregation forgetting to breathe.',
+      'Ruth stealing communion wafers to feed the chapel mouse, and confessing it every single week.',
+      'Burying an empty coffin, and letting the congregation believe she was inside.',
+      "Ruth's brother at the back of the church at her funeral, not coming in.",
+      'Your mother telling you God speaks quietly. He has not spoken at all lately.',
+      "Ruth's rosary, which you never could find after she vanished.",
+    ],
+    restFlash: 'You say the evening office by firelight and sleep with your rosary around the revolver.',
+  },
+};
+
+/** Everything story-shaped for one hunter, in one shape. */
+function storyFor(hero) {
+  const alt = CHAR_STORY[hero];
+  if (alt) {
+    return {
+      intro: alt.intro, hunt: ch => alt.hunt[ch], chapter: ch => alt.chapters[ch],
+      boss: ch => ({ ...ENCOUNTERS[ch].boss, ...alt.bosses[ch] }),
+      story: ch => alt.story[ch], finaleText: alt.finale, rest: alt.rest, endings: alt.endings,
+      memories: alt.memories, restFlash: alt.restFlash, voiced: false,
+    };
+  }
+  const kin = ch => FAMILY[ENCOUNTERS[ch].boss.kin];
+  return {
+    intro: STORY.intro, hunt: ch => `Hunting the one who killed ${kin(ch)}.`, chapter: ch => CHAPTER_INTROS[ch],
+    boss: ch => ({ ...ENCOUNTERS[ch].boss, cry: `For ${kin(ch)}.`, rest: `${kin(ch)} can rest now.` }),
+    story: ch => ({ ...STORY_EVENTS[ch], kicker: kin(ch) }), finaleText: FINALE.text,
+    rest: { req: FINALE.options[1].req, locked: FINALE.options[1].locked }, endings: ENDINGS,
+    memories: MEMORIES, restFlash: 'You sleep with your hat over your eyes and your hand on your iron. You dream of Clara laughing.', voiced: true,
+  };
+}
+
 // Make available to Node (tests) as well as the browser.
 if (typeof module !== 'undefined') {
-  module.exports = { cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
+  module.exports = { CHAR_STORY, storyFor, HEROES, STYLE_UNLOCKS, LEDGER, cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
 }

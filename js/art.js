@@ -103,7 +103,7 @@ const ART = (() => {
     `<img class="${cls}" src="art/${file}.webp" alt="${alt}" draggable="false" loading="lazy" ` +
     `onerror="this.outerHTML=this.dataset.fb" data-fb="${fallback.replace(/"/g, '&quot;')}">`;
   const demonArt = id => img(id, 'paint demon-paint', ENEMIES[id].name, demon(ENEMIES[id].art));
-  const heroArt = () => img('hero', 'paint hero-paint', HERO.name, hero());
+  const heroArt = (key = 'jonah') => img(HEROES[key].art, 'paint hero-paint', HEROES[key].name, hero());
   const folkArt = (f, demonId, seed) =>
     `<div class="portrait-stack">${img(f.img || 'folk_0', 'paint guise', f.name, folk(seed, null))}` +
     (demonId ? img(demonId, 'paint true-form', ENEMIES[demonId].name, demon(ENEMIES[demonId].art)) : '') + '</div>';

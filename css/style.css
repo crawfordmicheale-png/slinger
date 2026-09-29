@@ -641,3 +641,62 @@ button.tonic:hover { transform: translateY(-2px) scale(1.08); box-shadow: 0 0 10
 .st-hostage { color: #fff; background: #7a1b1b; border-color: #ff8d7a66; }
 .keepsake-line .tonic { width: 30px; height: 30px; }
 @media (max-width: 760px) { .hud-tonics { display: none; } }
+
+/* ---------------------------------------------------------------- setup: hunters & the ledger */
+.setup h2 { margin-bottom: 14px; }
+.setup-h { font-family: var(--font-title); font-weight: normal; color: var(--rust); margin: 22px 0 8px; }
+.hunters { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.hunter {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; text-align: center;
+  background: #fff6e2; border: 2px solid #d8b57c; border-radius: 4px; cursor: pointer; color: var(--ink); font-family: var(--font-body);
+}
+.hunter:hover:not(:disabled) { border-color: var(--rust); }
+.hunter.sel { border-color: var(--blood); box-shadow: 0 0 0 3px #b0231b44; background: #ffeed6; }
+.hunter.locked { opacity: .6; cursor: not-allowed; }
+.hunter-art { display: block; width: 110px; height: 150px; overflow: hidden; text-align: center; }
+.hunter-art .paint { display: block; width: 110px; height: 150px; max-width: none; object-fit: contain; object-position: 50% 100%; }
+.hunter .lock { font-family: var(--font-title); font-size: 60px; color: #0004; }
+.hunter b { font-family: var(--font-title); font-weight: normal; font-size: 18px; }
+.hunter small { font-size: 13px; opacity: .85; }
+.hunter small .eye-ico { width: 16px; height: 11px; }
+.hunter-blurb { font-size: 13.5px; line-height: 1.3; font-style: italic; }
+.ledger-pages { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.ledger-page { font-family: var(--font-title); font-size: 14px; padding: 6px 12px; background: #fff6e2; border: 2px solid #d8b57c; border-radius: 3px; cursor: pointer; color: var(--ink); }
+.ledger-page.sel { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.ledger-page:disabled { opacity: .45; cursor: not-allowed; }
+.unlocks { list-style: none; padding: 0; margin: 12px 0 0; font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: center; }
+.unlocks li { opacity: .7; }
+.unlocks li.got { opacity: 1; color: #2c6a3a; }
+.hud-ledger { font-family: var(--font-body); font-size: 12px; color: #ff9a5a; margin-left: 4px; cursor: help; }
+
+/* ---------------------------------------------------------------- chapter map */
+.chapter-map { max-width: 760px; margin: 12px auto 4px; padding: 6px 10px; background: #2a1a10c8; border-radius: 6px; }
+.chapter-map svg { width: 100%; height: auto; display: block; }
+.m-trail { stroke: #f7e3b455; stroke-width: 2; stroke-dasharray: 5 6; }
+.m-trail.walked { stroke: #f7e3b4; stroke-dasharray: none; stroke-width: 3; }
+.m-trail.open { stroke: #ffcf6a; stroke-width: 2.5; }
+.m-node circle { fill: #3a2616; stroke: #f7e3b4aa; stroke-width: 2; }
+.m-node text { fill: #f7e3b4; font-family: var(--font-title); font-size: 17px; pointer-events: none; }
+.m-node.past { opacity: .35; }
+.m-node.visited circle { fill: #7a5a2a; stroke: #f7e3b4; }
+.m-node.reach { cursor: pointer; }
+.m-node.reach circle { fill: #8e3417; stroke: #ffcf6a; stroke-width: 3; animation: beckon 1.4s ease-in-out infinite; }
+.m-node.reach:hover circle, .m-node.reach:focus circle { fill: #b0431b; }
+.m-node.m-boss circle { fill: #3a0f0f; stroke: var(--blood); stroke-width: 3; }
+.m-node.m-story text { fill: #c38bff; }
+@keyframes beckon { 50% { stroke-width: 6; } }
+@media (prefers-reduced-motion: reduce) { .m-node.reach circle { animation: none; } }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 45;
+  padding: 10px 18px; background: #1c120b; color: #ffcf6a; border: 1px solid #ffcf6a88; border-radius: 4px;
+  font-family: var(--font-title); box-shadow: 0 8px 24px #000a; animation: slip 4.2s ease forwards; max-width: calc(100% - 32px); text-align: center;
+}
+@media (max-width: 760px) {
+  .nodes { gap: 10px; }
+  .node { width: calc(50% - 5px); min-height: 0; padding: 12px 8px; }
+  .node-ico { font-size: 30px; }
+  .node-name { font-size: 16px; }
+  .node-desc { font-size: 14px; }
+  .chapter-map { padding: 4px; }
+}
