@@ -92,7 +92,7 @@ body.between #vignette { background: radial-gradient(ellipse at center, rgba(0,0
 
 /* ---------------------------------------------------------------- chrome */
 #hud {
-  position: sticky; top: 0; z-index: 5;
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   padding: 8px 16px;
   background: linear-gradient(#2a1a10ee, #2a1a10cc);
