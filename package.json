@@ -1,0 +1,11 @@
+{
+  "name": "slinger",
+  "version": "0.1.0",
+  "description": "A fantasy wild-west deckbuilding RPG. Hunt the demons that wear human skins.",
+  "private": true,
+  "scripts": {
+    "test": "node tests/sim.js 300",
+    "start": "npx --yes http-server -c-1 -o ."
+  },
+  "license": "UNLICENSED"
+}
