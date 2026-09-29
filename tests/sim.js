@@ -51,7 +51,7 @@ function playRun(seed) {
   const run = new Run(seed);
   const api = {
     rand: run.rng,
-    gainCard: id => run.addCard(id),
+    gainCard: (id, up) => run.addCard(id, up),
     addCurse: id => run.addCard(id),
     gainKeepsake: () => { const k = run.randomKeepsake(); run.gainKeepsake(k); return k; },
     removeCardPrompt: () => run.removeCard(run.deck[0].uid),
@@ -82,6 +82,11 @@ function playRun(seed) {
     } else if (ch.type === 'post') {
       const shop = run.makeShop();
       const c = shop.cards.find(x => x.price <= run.gold); if (c) { run.gold -= c.price; run.addCard(c.id); }
+    } else if (ch.type === 'story') {
+      const ev = STORY_EVENTS[run.chapter];
+      const opts = ev.options.filter(o => !o.req || o.req(run));
+      assert(typeof opts[Math.floor(run.rng() * opts.length)].run(run, api) === 'string');
+      assert(run.journal.length > 0, 'story event should add a journal entry');
     } else if (ch.type === 'trail') {
       const ev = EVENTS[Math.floor(run.rng() * EVENTS.length)];
       const opts = ev.options.filter(o => !o.req || o.req(run));

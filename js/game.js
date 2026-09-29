@@ -407,10 +407,16 @@ class Run {
     this.usedEvents = [];
     this.kills = 0;
     this.innocents = 0;
+    this.flags = {};    // story choices: remembered, confessed, forgiven, vow
+    this.journal = [];  // { chapter, title, text }
     this.choices = this.genChoices();
   }
 
   has(k) { return this.keepsakes.includes(k); }
+
+  addJournal(title, text) {
+    if (!this.journal.some(j => j.title === title)) this.journal.push({ chapter: this.chapter, title, text });
+  }
 
   gainKeepsake(k) {
     if (!k || this.has(k)) return;
@@ -452,6 +458,7 @@ class Run {
       out.push({ type: t });
     }
     if (s === STEPS_PER_CHAPTER - 2 && !out.some(o => o.type === 'camp')) out[out.length - 1] = { type: 'camp' };
+    if (s === 2) out[0] = { type: 'story' }; // each chapter's story encounter
     return out;
   }
 

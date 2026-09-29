@@ -83,14 +83,30 @@ function renderHUD() {
     <div class="hud-mid">${r.chapter <= 3 ? CHAPTERS[r.chapter].title : ''}</div>
     <div class="hud-right">
       <span class="keepsakes">${r.keepsakes.map(keepsakeHTML).join('')}</span>
+      <button class="btn small" data-act="journal">Journal (${r.journal.length})</button>
       <button class="btn small" data-act="view-deck">Deck (${r.deck.length})</button>
+      ${soundButtons()}
     </div>`;
+}
+
+function soundButtons() {
+  return `<button class="btn small snd ${AUDIO.isOn('music') ? '' : 'off'}" data-act="toggle-music" aria-pressed="${AUDIO.isOn('music')}" title="Music">♫</button>` +
+    `<button class="btn small snd ${AUDIO.isOn('sfx') ? '' : 'off'}" data-act="toggle-sfx" aria-pressed="${AUDIO.isOn('sfx')}" title="Sound effects">✹</button>`;
+}
+
+// Which music plays on which screen.
+function musicFor(name) {
+  if (name === 'combat') return S.fightKind === 'boss' ? 'boss' : 'between';
+  if (name === 'boss' || name === 'finale') return 'between';
+  if (name === 'gameover') return 'somber';
+  return 'trail';
 }
 
 function setScreen(name) {
   S.screen = name;
+  AUDIO.music(musicFor(name));
   S.sel = null;
-  document.body.classList.toggle('between', name === 'combat');
+  document.body.classList.toggle('between', name === 'combat' || name === 'finale');
   render();
   window.scrollTo(0, 0);
 }
@@ -115,6 +131,7 @@ const SCREENS = {
       <div class="menu">
         <button class="btn big" data-act="new-run">Ride Out</button>
         <button class="btn" data-act="how">How to Play</button>
+        <div class="title-sound">${soundButtons()}</div>
       </div>
     </section>`,
 
@@ -122,7 +139,7 @@ const SCREENS = {
     <section class="panel story">
       ${STORY.intro.map(p => `<p>${esc(p)}</p>`).join('')}
       <p class="between-note">${esc(STORY.between)}</p>
-      <button class="btn big" data-act="to-map">Take up the hunt</button>
+      <button class="btn big" data-act="to-chapter">Take up the hunt</button>
     </section>`,
 
   map: () => {
@@ -133,10 +150,13 @@ const SCREENS = {
       `<span class="trail-dot ${i < r.step ? 'done' : i === r.step ? 'here' : ''} ${i === STEPS_PER_CHAPTER - 1 ? 'boss' : ''}"></span>`).join('<span class="trail-line"></span>');
     const node = (c, i) => {
       const info = NODE_INFO[c.type];
+      const story = STORY_EVENTS[r.chapter];
+      const name = c.type === 'boss' ? esc(boss.guise) : c.type === 'story' ? esc(story.title) : info.name;
+      const desc = c.type === 'boss' ? `The one who killed ${kinName(boss.kin)}.` : c.type === 'story' ? `Someone here knew ${kinName(story.kin)}.` : info.desc;
       return `<button class="node node-${c.type}" data-act="pick-node" data-i="${i}">
         <span class="node-ico">${info.icon}</span>
-        <span class="node-name">${c.type === 'boss' ? esc(boss.guise) : info.name}</span>
-        <span class="node-desc">${c.type === 'boss' ? `The one who killed ${kinName(boss.kin)}.` : info.desc}</span>
+        <span class="node-name">${name}</span>
+        <span class="node-desc">${desc}</span>
       </button>`;
     };
     return `
@@ -202,6 +222,7 @@ const SCREENS = {
         <h2>${esc(b.guise)}</h2>
         <div class="boss-art">${ART.demonArt(b.foes[0])}</div>
         <p>${esc(b.before)}</p>
+        <p class="speech">${esc(b.taunt)}</p>
         <button class="btn big danger" data-act="fight-boss">For ${kinName(b.kin)}.</button>
       </section>`;
   },
@@ -297,7 +318,8 @@ const SCREENS = {
       <section class="panel camp">
         <h2>Campfire</h2>
         <div class="fire"><span></span><span></span><span></span></div>
-        <p class="sub">${S.flash ? esc(S.flash) : 'Coyotes sing somewhere out past the firelight. The Veil feels thin tonight. Your Sight is restored.'}</p>
+        <p class="memory">${esc(S.memory || '')}</p>
+        <p class="sub">${S.flash ? esc(S.flash) : 'Coyotes sing somewhere past the firelight. The Veil feels thin tonight. Your Sight is restored.'}</p>
         ${S.campDone ? '<div class="row center"><button class="btn big" data-act="leave">Break camp</button></div>' : `
         <div class="row center">
           <button class="btn big" data-act="rest">Rest<br><small>Heal ${heal} HP</small></button>
@@ -331,7 +353,8 @@ const SCREENS = {
     const ev = S.event;
     const r = S.run;
     return `
-      <section class="panel event">
+      <section class="panel event ${ev.kin ? 'story-event' : ''}">
+        ${ev.kin ? `<div class="kicker">${kinName(ev.kin)}</div>` : ''}
         <h2>${esc(ev.title)}</h2>
         <p>${esc(ev.text)}</p>
         ${S.eventResult ? `<p class="result">${esc(S.eventResult)}</p><div class="row center"><button class="btn big" data-act="leave">Ride on</button></div>` : `
@@ -346,6 +369,7 @@ const SCREENS = {
     return `
       <section class="panel story">
         <h2>${kinName(b.kin)} can rest now.</h2>
+        ${b.last ? `<p class="speech">${esc(b.last)}</p>` : ''}
         <p>${esc(b.after)}</p>
         ${b.reward ? `<p class="loot-line keepsake-line">${keepsakeHTML(b.reward)} <b>${esc(KEEPSAKES[b.reward].name)}</b> — ${esc(KEEPSAKES[b.reward].desc)}</p>` : ''}
         <p class="sub">You rest for three days. Your wounds close. (Health fully restored.)</p>
@@ -353,13 +377,48 @@ const SCREENS = {
       </section>`;
   },
 
-  victory: () => `
+  chapterIntro: () => {
+    const r = S.run;
+    const ci = CHAPTER_INTROS[r.chapter];
+    return `
+      <section class="panel story chapter-intro">
+        <div class="kicker">${esc(CHAPTERS[r.chapter].title.split(' — ')[0])}</div>
+        <h2>${esc(CHAPTERS[r.chapter].title.split(' — ')[1])}</h2>
+        <figure class="letter">
+          <blockquote>${esc(ci.letter.text)}</blockquote>
+          <figcaption>${ci.letter.from === 'unsigned' ? 'An unsigned card' : 'A letter from ' + esc(ci.letter.from)}</figcaption>
+        </figure>
+        ${ci.paras.map(p => `<p>${esc(p)}</p>`).join('')}
+        <button class="btn big" data-act="to-map">Ride on</button>
+      </section>`;
+  },
+
+  finale: () => {
+    const r = S.run;
+    return `
+      <section class="panel story finale">
+        <div class="boss-art">${ART.demonArt('grey_gentleman')}</div>
+        ${FINALE.text.map((p, i) => `<p class="${i ? 'speech' : ''}">${esc(p)}</p>`).join('')}
+        <div class="options">
+          ${FINALE.options.map(o => {
+            const ok = !o.req || o.req(r);
+            return `<button class="btn option" data-act="ending" data-id="${o.id}" ${ok ? '' : 'disabled'}>${esc(o.label)}${ok ? '' : `<br><small>${esc(o.locked)}</small>`}</button>`;
+          }).join('')}
+        </div>
+      </section>`;
+  },
+
+  victory: () => {
+    const e = ENDINGS[S.endingId || 'hunter'];
+    return `
     <section class="panel story victory">
-      <h2>${esc(ENCOUNTERS[3].boss.after)}</h2>
-      ${STORY.victory.map(p => `<p>${esc(p)}</p>`).join('')}
-      <p class="stats">Demons sent back: ${S.run.kills} · Innocents wronged: ${S.run.innocents}</p>
+      <div class="kicker">Ending</div>
+      <h2>${esc(e.title)}</h2>
+      ${e.text.map(p => `<p>${esc(p)}</p>`).join('')}
+      <p class="stats">Demons sent back: ${S.run.kills} · Innocents wronged: ${S.run.innocents} · Journal entries: ${S.run.journal.length}</p>
       <button class="btn big" data-act="title">The End</button>
-    </section>`,
+    </section>`;
+  },
 
   gameover: () => `
     <section class="panel story gameover">
@@ -377,6 +436,7 @@ const NODE_INFO = {
   camp:   { name: 'Campfire', icon: '♨', desc: 'Rest or clean your iron. Restores Sight.' },
   post:   { name: 'Trading Post', icon: '$', desc: 'Buy cards and supplies. Burn what you don\'t need.' },
   trail:  { name: 'The Trail', icon: '?', desc: 'Something waits by the road.' },
+  story:  { name: 'A Lead', icon: '✎', desc: '' },
   boss:   { name: 'Reckoning', icon: '☠', desc: '' },
 };
 const INTENT_ICON = { atk: '⚔ ', def: '⛨ ', buff: '▲ ', debuff: '☠ ', summon: '✚ ' };
@@ -396,9 +456,18 @@ function pickNode(i) {
   S.flash = '';
   S.campDone = false;
   switch (c.type) {
-    case 'town': S.town = r.makeTown(); setScreen('town'); break;
+    case 'town': S.town = r.makeTown(); S.guilt = null; setScreen('town'); break;
     case 'wanted': setScreen('wanted'); break;
-    case 'camp': r.sight = r.maxSight; setScreen('camp'); break;
+    case 'camp':
+      r.sight = r.maxSight;
+      S.memory = pick(r.rng, MEMORIES);
+      setScreen('camp');
+      break;
+    case 'story':
+      S.event = STORY_EVENTS[r.chapter];
+      S.eventResult = null;
+      setScreen('event');
+      break;
     case 'post': S.shop = r.makeShop(); setScreen('post'); break;
     case 'trail': {
       let pool = EVENTS.filter(e => !r.usedEvents.includes(e.id));
@@ -411,6 +480,25 @@ function pickNode(i) {
     }
     case 'boss': setScreen('boss'); break;
   }
+  AUDIO.sfx('deal');
+}
+
+function showChapterIntro() {
+  const r = S.run;
+  const ci = CHAPTER_INTROS[r.chapter];
+  r.addJournal(ci.letter.from === 'unsigned' ? 'A Card on Clara\'s Grave' : `Letter from ${ci.letter.from}`, ci.letter.text);
+  setScreen('chapterIntro');
+}
+
+function showJournal() {
+  const j = S.run.journal;
+  openModal(`
+    <h3>Journal</h3>
+    <div class="journal">
+      ${j.length ? j.map(e => `<article><div class="kicker">${esc(CHAPTERS[e.chapter].title.split(' — ')[0])}</div><h4>${esc(e.title)}</h4><p>${esc(e.text)}</p></article>`).join('')
+        : '<p class="sub">Nothing written yet.</p>'}
+    </div>
+    <div class="row center"><button class="btn" data-act="close-modal">Close</button></div>`);
 }
 
 function leaveNode() {
@@ -431,6 +519,7 @@ function startFight(foes, kind, opts = {}) {
   veil.innerHTML = `<span>${opts.ambushed ? 'It strikes first.' : 'The world slips.'}</span>`;
   document.body.appendChild(veil);
   setTimeout(() => veil.remove(), 1600);
+  AUDIO.sfx('slip');
   setScreen('combat');
 }
 
@@ -448,10 +537,13 @@ function winFight() {
     keepsake = ENCOUNTERS[r.chapter].boss.reward;
     if (keepsake) r.gainKeepsake(keepsake);
   }
-  if (kind === 'boss' && r.chapter === 3) { setScreen('victory'); return; }
+  AUDIO.sfx('coin', 0.3);
+  if (kind === 'boss') r.addJournal(`${kinName(ENCOUNTERS[r.chapter].boss.kin)}`, ENCOUNTERS[r.chapter].boss.after);
+  if (kind === 'boss' && r.chapter === 3) { setScreen('finale'); return; }
   S.reward = {
     title: kind === 'boss' ? 'Vengeance' : kind === 'elite' ? 'Bounty Collected' : 'Back Through the Veil',
-    text: kind === 'boss' ? '' : 'The Between lets go of you. The street is just a street again.',
+    text: kind === 'boss' ? '' : kind === 'normal' && S.guilt ? `The town buries ${S.guilt} in the morning. You do not stay for it.`
+      : kind === 'normal' ? pick(r.rng, THANKS) : 'The Between lets go of you. The street is just a street again.',
     gold, keepsake,
     cards: r.cardChoices(3, kind === 'elite' ? 0.1 : kind === 'boss' ? 0.3 : 0),
     cardTaken: null,
@@ -461,6 +553,7 @@ function winFight() {
 
 function loseFight() {
   S.combat.finish();
+  AUDIO.sfx('toll');
   setScreen('gameover');
 }
 
@@ -480,15 +573,16 @@ function afterCombatRender() {
     let text = null, cls = '';
     if (e.type === 'hit') {
       text = e.n ? `-${e.n}` : (e.blocked ? 'blocked' : '0'); cls = e.n ? 'dmg' : 'blocked'; shake(el, delay);
+      AUDIO.sfx(e.uid === 'player' && e.n ? 'hurt' : e.n ? 'hit' : 'cover', delay / 1000);
       if (e.n) hurt(el.querySelector('.foe-art, .hero-art'), delay);
       if (e.uid === 'player' && e.n >= 12) quake();
     }
-    else if (e.type === 'die') { dissolve(el); continue; }
-    else if (e.type === 'burn') { text = `-${e.n} 🔥`; cls = 'dmg burn'; }
+    else if (e.type === 'die') { dissolve(el); AUDIO.sfx('death'); continue; }
+    else if (e.type === 'burn') { text = `-${e.n} 🔥`; cls = 'dmg burn'; AUDIO.sfx('burn', delay / 1000); }
     else if (e.type === 'heal' && e.n) { text = `+${e.n}`; cls = 'heal'; }
     else if (e.type === 'cover') { text = `+${e.n} cover`; cls = 'cover'; }
     else if (e.type === 'status') { text = `${STATUS[e.key].name} ${e.n}`; cls = STATUS[e.key].good ? 'buff' : 'debuff'; }
-    else if (e.type === 'phase') { showBanner(e.text); }
+    else if (e.type === 'phase') { showBanner(e.text); AUDIO.sfx('boom'); }
     if (text) {
       const k = stack[e.uid] = (stack[e.uid] || 0) + 1;
       floater(el, text, cls, delay, (k - 1) * 26);
@@ -605,6 +699,7 @@ function dealHand(wait = 0) {
       { transform: `translate(${from.x - to.x}px, ${from.y - to.y}px) scale(.35) rotate(25deg)`, opacity: 0 },
       { transform: 'none', opacity: 1 },
     ], { duration: 380, delay: wait + k * 70, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' });
+    AUDIO.sfx('deal', (wait + k * 70) / 1000);
   });
 }
 
@@ -626,6 +721,8 @@ async function playCard(i, uid) {
     : targets.length ? centerOf(app.querySelector('.foes')) : centerOf(heroEl);
 
   flyCard(cardEl, dest, def.type === 'attack' ? 14 : 0);
+  AUDIO.sfx('whoosh');
+  if (card.id === 'reload' || card.id === 'speed_loader' || card.id === 'quick_hands') AUDIO.sfx('reload', 0.2);
   if (cardEl) cardEl.style.visibility = 'hidden';
   await sleep(260);
 
@@ -640,19 +737,23 @@ async function playCard(i, uid) {
         const p = centerOf(t);
         const hitP = { x: p.x + (Math.random() * 40 - 20), y: p.y + (Math.random() * 60 - 40) };
         burst(gun, 'muzzle', k * 70);
+        AUDIO.sfx('shot', k * 0.07);
         tracer(gun, hitP, card.id === 'hellfire_round' || c.p.pw.consecrated ? 'fire' : '', k * 70);
         burst(hitP, 'spark', k * 70 + 90);
       }
       quake();
     } else {
-      targets.forEach((t, k) => slash(t, 'blade', k * 60));
+      targets.forEach((t, k) => { slash(t, 'blade', k * 60); AUDIO.sfx('blade', k * 0.06); });
     }
   } else if (def.type === 'power') {
     burst(centerOf(heroEl), 'aura power');
+    AUDIO.sfx('buff');
   } else if (targets.length) {
     targets.forEach(t => { tracer(gunPoint(heroEl), centerOf(t), 'hex'); burst(centerOf(t), 'hexhit', 160); });
+    AUDIO.sfx('hex');
   } else {
     burst(centerOf(heroEl), 'shield');
+    if (!/reload|speed_loader/.test(card.id)) AUDIO.sfx(card.id === 'whiskey' ? 'heal' : 'cover');
   }
   await sleep(170);
   c.play(i, uid);
@@ -669,6 +770,7 @@ async function runEnemyTurn() {
   if (pile) {
     const to = centerOf(pile);
     app.querySelectorAll('.hand .slot .card').forEach(el => flyCard(el, to, 20));
+    AUDIO.sfx('whoosh');
   }
   await sleep(300);
   const queue = c.beginEnemyPhase();
@@ -684,15 +786,15 @@ async function runEnemyTurn() {
       if (m.atk) {
         animate(art, [{ transform: 'none' }, { transform: 'translateX(-80px) scale(1.08)', offset: 0.35 }, { transform: 'none' }], { duration: 560, easing: 'ease-in-out' });
         await sleep(200);
-        for (let h = 0; h < (m.hits || 1); h++) slash(heroEl, 'claw', h * 120);
+        for (let h = 0; h < (m.hits || 1); h++) { slash(heroEl, 'claw', h * 120); AUDIO.sfx('claw', h * 0.12); }
       } else {
         animate(art, [{ filter: 'brightness(1)' }, { filter: 'brightness(1.9) drop-shadow(0 0 18px #ff6a2b)' }, { filter: 'brightness(1)' }], { duration: 560 });
         await sleep(200);
       }
-      if (m.block) burst(centerOf(art), 'shield');
-      if (m.wrath || m.heal) burst(centerOf(art), 'aura');
-      if (m.summon) burst(centerOf(art), 'aura summon');
-      if (m.shaken || m.exposed || m.burn || m.curse) { tracer(centerOf(art), centerOf(heroEl), 'hex'); burst(centerOf(heroEl), 'hexhit', 160); }
+      if (m.block) { burst(centerOf(art), 'shield'); AUDIO.sfx('cover'); }
+      if (m.wrath || m.heal) { burst(centerOf(art), 'aura'); AUDIO.sfx('buff'); }
+      if (m.summon) { burst(centerOf(art), 'aura summon'); AUDIO.sfx('boom'); }
+      if (m.shaken || m.exposed || m.burn || m.curse) { tracer(centerOf(art), centerOf(heroEl), 'hex'); burst(centerOf(heroEl), 'hexhit', 160); AUDIO.sfx('hex'); }
     }
     c.enemyStep(e);
     await sleep(340);
@@ -815,7 +917,7 @@ function eventApi() {
   const r = S.run;
   return {
     rand: r.rng,
-    gainCard: id => r.addCard(id),
+    gainCard: (id, up) => r.addCard(id, up),
     addCurse: id => r.addCard(id),
     gainKeepsake: () => { const k = r.randomKeepsake(); r.gainKeepsake(k); return k; },
     removeCardPrompt: () => setTimeout(() => showCards('Choose a memory to give up', r.deck, true, uid => { r.removeCard(uid); closeModal(); render(); }, false), 0),
@@ -834,6 +936,11 @@ const ACTIONS = {
   'title': () => { S.run = null; setScreen('title'); },
   'how': howToPlay,
   'to-map': () => setScreen('map'),
+  'to-chapter': showChapterIntro,
+  'journal': showJournal,
+  'toggle-music': () => { AUDIO.unlock(); AUDIO.toggle('music'); render(); },
+  'toggle-sfx': () => { AUDIO.unlock(); AUDIO.toggle('sfx'); render(); },
+  'ending': el => { S.endingId = el.dataset.id; S.run.addJournal(ENDINGS[S.endingId].title, ENDINGS[S.endingId].text[0]); setScreen('victory'); },
   'view-deck': () => showCards(`Your deck (${S.run.deck.length})`, S.run.deck, false),
   'view-pile': el => {
     const c = S.combat; const pile = el.dataset.pile;
@@ -852,6 +959,7 @@ const ACTIONS = {
     if (r.sight <= 0 || f.seen) return;
     r.sight--;
     f.seen = true;
+    AUDIO.sfx('sight');
     S.flash = f.demon ? 'The skin slides aside like a curtain. Something grins back at you.' : 'Just a person. Tired, scared, alive.';
     render();
   },
@@ -859,10 +967,13 @@ const ACTIONS = {
     const r = S.run; const t = S.town; const f = t.folk[+el.dataset.i];
     if (f.demon) {
       S.flash = '';
+      S.guilt = null;
       startFight(t.enc.foes, 'normal', { drop: true });
     } else {
       f.gone = true;
       r.innocents++;
+      S.guilt = f.name;
+      AUDIO.sfx('wrong');
       r.addCard('blood_on_hands');
       r.hp = Math.max(1, r.hp - 6);
       startFight(t.enc.foes, 'normal', { ambushed: true });
@@ -883,6 +994,7 @@ const ACTIONS = {
   'take-card': el => {
     const rw = S.reward; const id = rw.cards[+el.dataset.i];
     S.run.addCard(id);
+    AUDIO.sfx('deal');
     rw.cardTaken = CARDS[id].name;
     render();
   },
@@ -892,12 +1004,13 @@ const ACTIONS = {
       setScreen('chapterEnd');
     } else leaveNode();
   },
-  'next-chapter': () => { S.run.advance(); S.run.sight = S.run.maxSight; setScreen('map'); },
+  'next-chapter': () => { S.run.advance(); S.run.sight = S.run.maxSight; showChapterIntro(); },
 
   // camp
   'rest': () => {
     const r = S.run; const heal = Math.floor(r.maxHp * 0.3);
     r.hp = Math.min(r.maxHp, r.hp + heal);
+    AUDIO.sfx('heal');
     S.flash = 'You sleep with your hat over your eyes and your hand on your iron. You dream of Clara laughing.';
     S.campDone = true; render();
   },
@@ -907,6 +1020,7 @@ const ACTIONS = {
       const card = r.deck.find(c => c.uid === uid);
       showUpgradeCompare(card, () => {
         r.upgradeCard(uid);
+        AUDIO.sfx('reload');
         S.flash = `You strip, oil, and reassemble by firelight. ${CARDS[card.id].name} is sharper now.`;
         S.campDone = true; render();
       });
@@ -918,6 +1032,7 @@ const ACTIONS = {
     const r = S.run; const item = S.shop.cards[+el.dataset.i];
     if (item.sold || r.gold < item.price) return;
     r.gold -= item.price; item.sold = true; r.addCard(item.id);
+    AUDIO.sfx('coin');
     S.flash = `"${CARDS[item.id].name}. Good choice." She counts your coins twice.`;
     render();
   },
@@ -943,6 +1058,7 @@ const ACTIONS = {
     const r = S.run; const sh = S.shop;
     if (r.gold < sh.healPrice) return;
     r.gold -= sh.healPrice; r.hp = Math.min(r.maxHp, r.hp + 20);
+    AUDIO.sfx('heal');
     S.flash = 'Beans, cornbread, and hot water. You almost feel human.';
     render();
   },
@@ -964,8 +1080,12 @@ const ACTIONS = {
   },
 };
 
+// Browsers only allow sound after the player interacts with the page.
+['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => AUDIO.unlock(), { passive: true }));
+
 document.addEventListener('click', ev => {
   const el = ev.target.closest('[data-act]');
+  if (el && el.tagName === 'BUTTON' && !el.disabled && !/toggle-/.test(el.dataset.act)) AUDIO.sfx('click');
   if (!el || !el.dataset.act || el.disabled) {
     // Clicking empty space cancels targeting.
     if (S.screen === 'combat' && S.sel !== null && !ev.target.closest('.slot, .foe')) { S.sel = null; render(); }

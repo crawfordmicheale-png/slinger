@@ -502,6 +502,8 @@ const ENCOUNTERS = {
     boss: {
       foes: ['hollow_steer'], guise: 'Silas Pike, Cattle Baron', kin: 'amos', reward: 'amos_harmonica',
       before: 'Silas Pike owns every cow and most of the men in Dry Hollow. Two years back, your brother Amos found out what Pike fed his herd. They found Amos in the stockyard. What was left of him.',
+      taunt: '"Your brother came poking round my herd," says Silas Pike, and his jaw swings open like a gate. "Herd was hungry."',
+      last: '"He keeps a ledger, Crane," the Steer gurgles as it burns. "Your name is on every page."',
       after: 'The Steer comes apart into smoke and flies. In the ash you find a battered harmonica. Amos played it badly, and all the time. You wipe the mouthpiece clean.',
     },
   },
@@ -516,6 +518,8 @@ const ENCOUNTERS = {
     boss: {
       foes: ['silk_widow'], guise: 'Madame Odile of the Gilded Lily', kin: 'ruth', reward: 'ruths_rosary',
       before: 'Your sister Ruth sang at the Gilded Lily in Coldwater. She wrote home every Sunday. Then the letters stopped. When you came looking, Madame Odile smiled and said Ruth had simply gone away.',
+      taunt: '"She sang so sweetly for me," says Madame Odile. "Your Ruth. Stay a while, Marshal. I will teach you the words."',
+      last: '"Ask him about the Butcher," the Widow hisses. "Ask him why the killing stopped." Then she comes apart.',
       after: 'The Widow shrieks and unravels, thread by thread. Tangled in the silk you find Ruth\'s rosary, every bead still warm. You say one prayer. You are out of practice.',
     },
   },
@@ -530,6 +534,8 @@ const ENCOUNTERS = {
     boss: {
       foes: ['grey_gentleman'], guise: 'The Gentleman in Grey', kin: 'clara', reward: null,
       before: 'You were out chasing a horse thief the night he came to your door. Clara let him in because he was polite. He always is. He is waiting for you at the end of the line, in Babel Mesa, in a grey suit that never gets dusty.',
+      taunt: '"Marshal. You look tired." He does not get up. "Six years ago you needed a killer, and I gave you one. Eli Wheeler swung, the killings stopped, and you slept like a baby. Did you never wonder why they stopped?" He smiles. "Three souls for one. I call that a bargain."',
+      last: '',
       after: 'The Gentleman folds into himself like a letter and burns. The Between shudders, and for a moment you see Clara on the porch of your old house, shading her eyes against the sun. Then the world is just the world again.',
     },
   },
@@ -700,18 +706,218 @@ const STORY = {
     'Then came the week of three funerals. Your brother Amos, trampled in a stockyard. Your sister Ruth, gone from a saloon in Coldwater. And Clara, your wife, in your own house, while you were out chasing a horse thief.',
     'At the last graveside something in you tore open, and you saw them: the demons that walk the frontier in borrowed skins. Barbers. Bankers. Preachers. You can see through the Veil now. Nobody else can.',
     'You left your star on Clara\'s headstone. Now you hunt.',
+    'You do not think about the hanging. You have gotten very good at not thinking about the hanging.',
   ],
   between: 'When you draw iron on a demon, the world slips into the Between: the same street, the same sky, only wrong. Out there they cannot hide their faces. Neither can you.',
-  victory: [
-    'Three names. Three graves. Three debts paid.',
-    'You ride back to Cinder County. The star is still on Clara\'s headstone, dull with two years of dust. You leave it there.',
-    'The Veil is still thin. You can still see them, the ones still hiding in borrowed skins. Maybe you always will.',
-    'You check your iron. Six rounds. You ride on.',
-  ],
   death: 'Another nameless grave on the prairie. The demons of the frontier sleep a little easier tonight.',
 };
 
+// ---------------------------------------------------------------------------
+// THE LONGER STORY
+// Six years ago the Cinder County Butcher was killing children and Marshal
+// Crane could not catch him. A polite stranger in grey gave him a name, Eli
+// Wheeler, and Jonah hanged Eli without a trial. The killings stopped, because
+// the stranger was the Butcher. "Consider it a favor. I'll collect someday."
+// Amos, Ruth and Clara were the collection. Jonah learns this a piece at a time.
+// ---------------------------------------------------------------------------
+const CHAPTER_INTROS = {
+  1: {
+    letter: {
+      from: 'Amos Crane',
+      text: "Jonah. Pike's herd don't graze and they don't drink. Last night I seen one of them steers eat a dog, bones and all, and then look at me like it knew my name. Pike gets a visitor on Sundays, a gent in a grey suit who never takes off his hat. Don't laugh. I know you'll laugh. A.",
+    },
+    paras: [
+      'Amos wrote that a week before they found him. You laughed when you read it. You have not laughed since.',
+      'Dry Hollow is cattle country, and every cow in it belongs to Silas Pike.',
+    ],
+  },
+  2: {
+    letter: {
+      from: 'Ruth Crane',
+      text: 'Dear Jonah, Coldwater is cold, like the name. Madame Odile says I have the finest voice she has heard in forty years, which is strange, because she does not look forty. A gentleman in grey comes to hear me sing every Saturday. He asked after you. He says you and he have business. Write back. Your loving sister, Ruth.',
+    },
+    paras: [
+      'That was her last letter. It came three days after you buried Amos.',
+      'Coldwater sits at the bottom of a canyon where the sun comes up late and leaves early.',
+    ],
+  },
+  3: {
+    letter: {
+      from: 'unsigned',
+      text: 'Marshal Crane. You have been busy, and I do admire industry. Come to Babel Mesa and we shall settle our accounts like gentlemen. You will remember the terms, I trust. Cordially, G.',
+    },
+    paras: [
+      "You found this card on Clara's headstone, weighed down with your own tin star.",
+      'He talks about terms as if you shook on something. You would remember that. Wouldn\'t you?',
+    ],
+  },
+};
+
+// One story encounter per chapter, offered on the trail at step 2.
+const STORY_EVENTS = {
+  1: {
+    id: 'stockyard_boy',
+    title: 'The Stockyard Boy',
+    kin: 'amos',
+    text: "A boy of maybe twelve sits whittling on the stockyard fence where Amos died. \"You're his brother,\" he says without looking up. \"He talked about you. Said you was the best lawman in the territory. Before.\" \"Before what?\" \"Before the hanging. That's what he always said. Before the hanging.\"",
+    options: [
+      {
+        label: 'Ask him about the man in grey.',
+        run: (r, api) => {
+          r.addJournal('The Grey Visitor', 'The stockyard boy says the man in grey came the night before Amos died. He shook Pike\'s hand, and Pike\'s hand came away black. Then he asked the boy whether he knew a Marshal Jonah Crane. "Tell him I\'m keeping the ledger," he said.');
+          api.gainCard('dead_eye');
+          return '"Said to tell you he\'s keeping the ledger," the boy says. "Whatever that means." He hands you a rifle cartridge Amos gave him. It is heavier than it should be. (Gain Dead Eye.)';
+        },
+      },
+      {
+        label: 'Ask him what hanging he means.',
+        run: (r, api) => {
+          r.flags.remembered = true;
+          r.addJournal('Before the Hanging', '"Some drifter," the boy said. "Eli something. Amos said you hanged him and it weren\'t right, and you ain\'t been right since." You told him he didn\'t know what he was talking about. Your hands were shaking.');
+          api.gainCard('grim_resolve');
+          return '"Some drifter. Eli something," the boy says. "Amos said it weren\'t right." You tell him he doesn\'t know what he\'s talking about. Your hands are shaking. (Gain Grim Resolve.)';
+        },
+      },
+      {
+        label: 'Give him the money Amos would have. (25 gold)',
+        req: r => r.gold >= 25,
+        run: (r, api) => {
+          r.gold -= 25;
+          r.addJournal("Amos's Boy", 'You gave the stockyard boy twenty-five dollars. He gave you Amos\'s pocketknife, the one with the elk-horn handle that you gave Amos for his sixteenth birthday.');
+          api.gainCard('bowie_knife', true);
+          return 'He pockets the money and hands you a knife with an elk-horn handle. You gave it to Amos for his sixteenth birthday. (Gain an upgraded Bowie Knife.)';
+        },
+      },
+    ],
+  },
+  2: {
+    id: 'sister_agnes',
+    title: 'Sister Agnes',
+    kin: 'ruth',
+    text: "Coldwater's chapel is small and cold. When you give your name, Sister Agnes lights a candle for Ruth. \"She came to me a week before,\" the nun says. \"Frightened. She said the man in grey told her that her brother owed him a debt, and that debts pass down to family. She asked me what you could possibly owe a man like that.\" She waits. \"What do you owe him, Marshal?\"",
+    options: [
+      {
+        label: 'Tell her the truth about Eli Wheeler.',
+        run: (r, api) => {
+          r.flags.confessed = true;
+          r.addJournal('Confession', 'Six years ago the Cinder County Butcher was killing children, and you could not catch him. A polite man in a grey suit bought you a drink and gave you a name: Eli Wheeler, a drifter. You hanged Eli Wheeler on that man\'s word, without a trial. The killings stopped. "Consider it a favor," the man said. "I\'ll collect someday."');
+          r.hp = Math.min(r.maxHp, r.hp + 15);
+          api.gainCard('last_rites');
+          return 'You tell her everything: the Butcher, the man in grey, Eli Wheeler, the rope. You have never said it out loud before. When you finish, the candle has burned halfway down. Sister Agnes presses a blessed cartridge into your hand. "Finish it," she says. (Heal 15. Gain Last Rites.)';
+        },
+      },
+      {
+        label: '"I don\'t owe him a thing."',
+        run: (r, api) => {
+          r.addJournal('Denial', 'You left the chapel before the candle burned down. Sister Agnes called after you: "The ones who will not remember their debts are the ones who pay the most."');
+          api.gainCard('blood_oath');
+          return 'You leave before the candle burns down. "The ones who will not remember their debts," she calls after you, "are the ones who pay the most." (Gain Blood Oath.)';
+        },
+      },
+    ],
+  },
+  3: {
+    id: 'widow_wheeler',
+    title: 'The Widow Wheeler',
+    kin: 'clara',
+    text: "At the foot of Babel Mesa stands the oldest cottonwood in the territory. A woman in black sits beneath it. You know the tree. You know the woman. You threw the rope over that branch yourself. \"Marshal Crane,\" says Martha Wheeler. \"He told me you'd come. The man in grey. He visits sometimes, to tell me how sorry he is about Eli. He laughs when he says it.\" She studies you. \"Eli never hurt a soul. You know that now, don't you?\"",
+    options: [
+      {
+        label: 'Get down on your knees and ask her forgiveness.',
+        run: r => {
+          r.flags.forgiven = true;
+          r.addJournal('Martha Wheeler', '"I can\'t forgive you," Martha Wheeler said. "Not yet. But I can pray you finish it." She tied a strip of black cloth around your arm. For Eli.');
+          r.hp = r.maxHp;
+          return '"I can\'t forgive you," she says at last. "Not yet. But I can pray you finish it." She ties a strip of black cloth around your arm. For Eli. (Health fully restored.)';
+        },
+      },
+      {
+        label: '"I\'ll make him pay for Eli too."',
+        run: (r, api) => {
+          r.flags.vow = true;
+          r.addJournal('A Fourth Name', 'You added a fourth name to the three you carry: Eli Wheeler. Martha said nothing. When you rode up the mesa she was still watching you.');
+          api.gainCard('judgment', true);
+          return 'You add a fourth name to the three you carry. Martha says nothing. When you ride away she is still watching. (Gain an upgraded Judgment.)';
+        },
+      },
+      {
+        label: 'Say nothing. Ride on.',
+        run: r => {
+          r.addJournal('Silence', 'You rode past Martha Wheeler without a word. You felt her eyes on your back all the way up the mesa.');
+          r.gold += 40;
+          return 'You ride on. You feel her eyes on your back all the way up the mesa. Later you find forty dollars in your saddlebag that you do not remember putting there. (Gain 40 gold.)';
+        },
+      },
+    ],
+  },
+};
+
+const FINALE = {
+  text: [
+    'The Gentleman in Grey lies in the red dust of the Between. His hat has rolled away. Under it there is no face, only a ledger bound in black leather where a heart should be, its pages full of names. He is still smiling.',
+    '"Well played, Marshal. Here is the trouble. Someone has to keep the books. Put me down and the Veil stays open in your eyes for the rest of your life. Or pick up the hat, and the ledger, and you will never lose anyone again."',
+  ],
+  options: [
+    { id: 'hunter', label: 'Put him down. Keep hunting.' },
+    { id: 'rest', label: 'Burn the ledger.', req: r => r.flags.confessed || r.flags.forgiven, locked: 'You would have to face what you did first.' },
+    { id: 'collector', label: 'Pick up the hat.' },
+  ],
+};
+
+const ENDINGS = {
+  hunter: {
+    title: 'The Hunter',
+    text: [
+      'You put two rounds through the ledger. The Gentleman sighs like a man settling into a warm bath, and is gone.',
+      "You ride back to Cinder County. The star is still on Clara's headstone, dull with two years of dust. You leave it there.",
+      'The Veil stays open. You can still see them, the ones hiding in borrowed skins. You always will.',
+      'You check your iron. Six rounds. You ride on.',
+    ],
+  },
+  rest: {
+    title: 'Rest',
+    text: [
+      "You tear the ledger out of him and feed it to the black sun, one page at a time. Amos. Ruth. Clara. Then a fourth name: Eli Wheeler. Then a fifth. Your own.",
+      'The Between comes apart like wet paper.',
+      "You wake at dawn on Clara's grave. The Sight is gone. The world is only the world, and it is very quiet.",
+      'You ride to Babel Mesa and dig Eli Wheeler a proper grave beneath the cottonwood. Martha Wheeler brings wildflowers. Neither of you says anything. It is enough.',
+    ],
+  },
+  collector: {
+    title: 'The Gentleman in Grey',
+    text: [
+      'You pick up the grey hat. It fits. Of course it fits.',
+      'The ledger is warm in your hands. Your own name is on the first page, in your own handwriting.',
+      'The suit never gets dusty. You never get tired.',
+      'Somewhere in the territory a desperate lawman is hunting a killer he cannot catch. You straighten your tie and go to buy him a drink.',
+    ],
+  },
+};
+
+// Remembered at the campfire, one per night.
+const MEMORIES = [
+  'Amos teaching you to throw a lasso when you were seven. You caught him instead of the fence post. He laughed until he fell over.',
+  'Ruth singing "Shall We Gather at the River" at your wedding, and every dog in town howling along.',
+  'Clara pressing her cold feet against you in January and pretending she had not.',
+  'The smell of Clara\'s bread, and the burn on her wrist from the oven door that never quite healed.',
+  "Amos's harmonica at the Fourth of July picnic. He knew two songs and played them both wrong.",
+  'Ruth, twelve years old, beating you at checkers and refusing to let you forget it for a decade.',
+  'The night you made marshal, and Clara pinning the star on crooked and saying it suited you better that way.',
+  'Eli Wheeler\'s boots turning slowly in the wind. You try to think about something else. You cannot.',
+  "Clara's last words to you: \"Mind that horse thief. He's faster than he looks.\" You laughed. You were out chasing him when it happened.",
+];
+
+// Said by townsfolk after you send their demon back.
+const THANKS = [
+  '"Obliged, mister," says the barkeep, and pours you one on the house.',
+  "A little girl hands you a wildflower. Her mother pulls her away, but she's smiling.",
+  'Nobody thanks you. Nobody saw what you saw. That is all right.',
+  'The preacher rings the church bell. First time in a month, somebody says.',
+  'An old man shakes your hand and will not let go. "I knew something was wrong with that one," he says. "I knew it."',
+  '"You\'re the one hunting them," a woman whispers. "God keep you, Marshal."',
+];
+
 // Make available to Node (tests) as well as the browser.
 if (typeof module !== 'undefined') {
-  module.exports = { HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY };
+  module.exports = { HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
 }
