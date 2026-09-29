@@ -27,6 +27,7 @@ const STATUS = {
   exposed: { name: 'Exposed', good: false, desc: 'Takes 50% more damage. Wears off by 1 each turn.' },
   shaken:  { name: 'Shaken',  good: false, desc: 'Deals 25% less damage. Wears off by 1 each turn.' },
   burn:    { name: 'Hellfire',good: false, desc: 'Loses this much HP at the start of its turn, then Hellfire drops by 1.' },
+  ward:    { name: 'Warded',  good: true,  desc: 'Hits that are not Silver or Blessed rounds deal half damage. Each Silver or Blessed hit, and each Hellfire tick, strips 1 Ward.' },
 };
 
 // ---------------------------------------------------------------------------
@@ -376,6 +377,52 @@ const SPECIAL_ROUNDS = ['silver', 'hellfire', 'blessed', 'buckshot'];
 const STARTING_BELT = ['lead', 'lead', 'silver', 'lead', 'lead', 'lead'];
 
 // ---------------------------------------------------------------------------
+// TONICS — one-use items carried in a satchel and used in a fight.
+// ---------------------------------------------------------------------------
+const TONIC_SLOTS = 3;
+const TONICS = {
+  miracle:    { name: "Pettibone's Miracle Tonic", desc: 'Heal 12 HP.', price: 25, use: c => c.heal(12) },
+  laudanum:   { name: 'Laudanum', desc: 'Gain 10 Cover and shake off Shaken.', price: 25, use: c => { c.cover(10); delete c.p.st.shaken; } },
+  dynamite:   { name: 'Dynamite', desc: 'Deal 12 damage to ALL foes.', price: 35, sfx: 'boom', use: c => c.alive().forEach(e => c.damage(c.p, e, 12)) },
+  peyote:     { name: 'Peyote Tea', desc: 'See every hidden intent this fight. Draw 2.', price: 20, sfx: 'sight', use: c => { c.unveiled = true; c.draw(2); } },
+  holy_vial:  { name: 'Vial of Holy Water', desc: 'Apply 5 Hellfire to ALL foes.', price: 30, sfx: 'hex', use: c => c.applyAll('burn', 5) },
+  coffee:     { name: 'Trail Coffee', desc: 'Gain 2 Grit.', price: 20, sfx: 'buff', use: c => c.gainGrit(2) },
+  venom:      { name: 'Rattlesnake Venom', desc: 'Apply 2 Exposed to ALL foes. (Exposing a demon frees its hostage.)', price: 25, sfx: 'hex', use: c => c.applyAll('exposed', 2) },
+  silver_box: { name: 'Box of Silver', desc: 'Load Silver into every chamber.', price: 35, sfx: 'reload', use: c => c.loadRound('silver', c.p.maxRounds) },
+};
+
+// ---------------------------------------------------------------------------
+// INFAMY — what the territory thinks of you. Wrong accusations and running
+// from towns raise it; clean work and honesty lower it.
+// ---------------------------------------------------------------------------
+const INFAMY = {
+  max: 10,
+  label: n => n >= 7 ? 'Hunted' : n >= 4 ? 'Wanted' : n >= 1 ? 'Talked About' : 'Unknown',
+  desc: n => [
+    'How the territory sees you.',
+    n >= 1 ? `Trading post prices are up ${Math.round(n * 6)}%.` : '',
+    n >= 4 ? 'Townsfolk clam up: one fewer question in every town.' : '',
+    n >= 7 ? 'Two fewer questions. Posses ride out after you.' : n >= 3 ? 'Posses may ride out after you.' : '',
+    'Wrong accusations add 3, riding out of a town without choosing adds 1. Clean detective work takes 1 away.',
+  ].filter(Boolean).join(' '),
+};
+
+const POSSE_EVENT = {
+  id: 'posse',
+  title: 'The Posse',
+  text: 'Eight riders block the road, rifles across their saddles. The sheriff has a poster with your face on it, badly drawn. "That\'s him. The one who goes around shooting decent folk and calling them devils."',
+  options: [
+    { label: r => `Pay the fine. (${20 + 10 * r.infamy} gold, less Infamy)`, req: r => r.gold >= 20 + 10 * r.infamy,
+      run: r => { r.gold -= 20 + 10 * r.infamy; r.addInfamy(-2); return 'The sheriff counts it twice and waves you through. "Don\'t come back."'; } },
+    { label: 'Look through the Veil at the sheriff. (1 Sight)', req: r => r.sight > 0,
+      run: r => { r.sight--; r.addInfamy(-1); return 'There is something small and black sitting on the sheriff\'s shoulder, whispering in his ear. You shoot it off him. The posse stares at the hole in the air, then at you, and rides home very quietly.'; } },
+    { label: 'Hand over your special rounds.', req: r => r.belt.some(x => x !== 'lead'),
+      run: r => { r.belt = r.belt.map(() => 'lead'); r.addInfamy(-1); return 'They take every round that isn\'t plain lead, "as evidence." (Your gun belt is all Lead now.)'; } },
+    { label: 'Draw on them.', run: r => { r.hp = Math.max(1, r.hp - 12); r.addInfamy(1); return 'You shoot the hats off three of them and ride through the gap. One of them clips you on the way out. (Lose 12 HP. More Infamy.)'; } },
+  ],
+};
+
+// ---------------------------------------------------------------------------
 // DETECTIVE WORK — every town lost someone last night.
 // ---------------------------------------------------------------------------
 const CASE = {
@@ -438,6 +485,7 @@ const ENEMIES = {
   // Chapter 1 ---------------------------------------------------------------
   razorjaw: {
     name: 'Razorjaw', hp: [38, 42], art: 'jaw',
+    hostage: { name: 'a customer in the barber chair', threshold: 12 },
     moves: {
       slash: { n: 'Straight Razor', atk: 8 },
       snip:  { n: 'Snip Snip', atk: 4, hits: 2 },
@@ -446,7 +494,7 @@ const ENEMIES = {
     pattern: ['slash', 'snip', 'hone'],
   },
   mourner: {
-    name: 'The Crawling Mourner', hp: [34, 38], art: 'veil',
+    name: 'The Crawling Mourner', hp: [34, 38], art: 'veil', veiled: true,
     moves: {
       wail:   { n: 'Wail', atk: 4, shaken: 2 },
       clutch: { n: 'Clutch', atk: 10 },
@@ -498,7 +546,7 @@ const ENEMIES = {
 
   // Chapter 2 ---------------------------------------------------------------
   measurer: {
-    name: 'The Measurer', hp: [58, 62], art: 'coffin',
+    name: 'The Measurer', hp: [58, 62], art: 'coffin', ward: 2,
     moves: {
       measure: { n: 'Take Your Measure', exposed: 2, block: 6 },
       bury:    { n: 'Six Feet Under', atk: 14 },
@@ -516,11 +564,11 @@ const ENEMIES = {
     pattern: ['deal', 'flush', 'ante'],
   },
   chalk_wraith: {
-    name: 'The Chalk Wraith', hp: [50, 54], art: 'veil',
+    name: 'The Chalk Wraith', hp: [50, 54], art: 'veil', veiled: true,
     moves: {
       lesson: { n: 'A Lesson', atk: 6, shaken: 2 },
       ruler:  { n: 'The Ruler', atk: 13 },
-      recite: { n: 'Recite', heal: 8, block: 8 },
+      recite: { n: 'Recite Your Lesson', mimic: true, block: 6 },
     },
     pattern: ['lesson', 'ruler', 'recite', 'ruler'],
   },
@@ -575,6 +623,7 @@ const ENEMIES = {
   },
   false_shepherd: {
     name: 'The False Shepherd', hp: [70, 74], art: 'crook',
+    hostage: { name: 'a kneeling parishioner', threshold: 15 },
     moves: {
       flock:  { n: 'Gather the Flock', summon: { id: 'lamb', n: 1 }, block: 8 },
       sermon: { n: 'Hellfire Sermon', shaken: 2, exposed: 1, burn: 3 },
@@ -588,7 +637,7 @@ const ENEMIES = {
     pattern: ['butt', 'bleat'], start: 'random',
   },
   iron_horror: {
-    name: 'The Iron Horror', hp: [96, 100], art: 'train',
+    name: 'The Iron Horror', hp: [96, 100], art: 'train', ward: 3,
     moves: {
       stoke: { n: 'Stoke the Boiler', wrath: 3, burn: 3 },
       rails: { n: 'Off the Rails', atk: 22 },
@@ -606,7 +655,7 @@ const ENEMIES = {
     pattern: ['peck', 'eye', 'dive'], start: 'random',
   },
   brimstone_marshal: {
-    name: 'The Brimstone Marshal', hp: [140, 146], art: 'hat', elite: true,
+    name: 'The Brimstone Marshal', hp: [140, 146], art: 'hat', elite: true, ward: 3,
     moves: {
       warrant: { n: 'Serve the Warrant', atk: 8, exposed: 2 },
       six:     { n: 'Six-Gun Salvo', atk: 4, hits: 6 },
@@ -622,10 +671,11 @@ const ENEMIES = {
       whisper: { n: 'Whispers Her Name', curse: { id: 'grief', n: 2 }, shaken: 2 },
       due:     { n: "Gunslinger's Due", atk: 6, hits: 3 },
       coach:   { n: 'Hellfire Coach', atk: 8, burn: 4 },
+      ledger:  { n: 'Balance the Ledger', atk: 9, collect: 1 },
     },
-    pattern: ['tip', 'due', 'whisper', 'debts', 'coach'],
+    pattern: ['tip', 'due', 'ledger', 'whisper', 'debts', 'coach'],
     phase2: {
-      at: 0.5, pattern: ['debts', 'coach', 'due', 'whisper', 'debts', 'tip'],
+      at: 0.5, pattern: ['debts', 'ledger', 'coach', 'due', 'whisper', 'ledger', 'tip'],
       text: 'He removes his hat. There is no face under the brim, only the night you came home too late.',
       wrath: 2,
     },
@@ -945,6 +995,7 @@ const STORY_EVENTS = {
         label: 'Tell her the truth about Eli Wheeler.',
         run: (r, api) => {
           r.flags.confessed = true;
+          r.addInfamy(-2);
           r.addJournal('Confession', 'Six years ago the Cinder County Butcher was killing children, and you could not catch him. A polite man in a grey suit bought you a drink and gave you a name: Eli Wheeler, a drifter. You hanged Eli Wheeler on that man\'s word, without a trial. The killings stopped. "Consider it a favor," the man said. "I\'ll collect someday."');
           r.hp = Math.min(r.maxHp, r.hp + 15);
           api.gainCard('last_rites');
@@ -971,6 +1022,7 @@ const STORY_EVENTS = {
         label: 'Get down on your knees and ask her forgiveness.',
         run: r => {
           r.flags.forgiven = true;
+          r.addInfamy(-1);
           r.addJournal('Martha Wheeler', '"I can\'t forgive you," Martha Wheeler said. "Not yet. But I can pray you finish it." She tied a strip of black cloth around your arm. For Eli.');
           r.hp = r.maxHp;
           return '"I can\'t forgive you," she says at last. "Not yet. But I can pray you finish it." She ties a strip of black cloth around your arm. For Eli. (Health fully restored.)';
@@ -1064,5 +1116,5 @@ const THANKS = [
 
 // Make available to Node (tests) as well as the browser.
 if (typeof module !== 'undefined') {
-  module.exports = { ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
+  module.exports = { cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
 }

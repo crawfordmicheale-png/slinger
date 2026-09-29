@@ -8,6 +8,8 @@ const { Combat, Run, cardStats, STEPS_PER_CHAPTER } = require('../js/game.js');
 
 function botTurn(c) {
   let guard = 0;
+  // Drink when it's getting ugly, or open a boss fight with one.
+  if (c.run.tonics.length && (c.p.hp < c.p.maxHp * 0.4 || (c.turn === 1 && c.enemies.some(e => e.boss)))) c.useTonic(0);
   while (!c.over && guard++ < 40) {
     const incoming = c.alive().reduce((a, e) => a + (e.intent.atk ? c.calcDamage(e, c.p, e.intent.atk) * (e.intent.hits || 1) : 0), 0);
     const needCover = incoming > c.p.block;
@@ -66,10 +68,10 @@ function playRun(seed) {
       assert.strictEqual(town.folk.filter(f => f.demon).length, 1);
       const drop = run.sight > 0; if (drop) run.sight--;
       won = fight(run, town.enc.foes, { drop });
-      if (won) { run.afterFight(); run.gold += run.goldReward('normal'); pickReward(run, run.cardChoices(3)); }
+      if (won) { run.afterFight(); run.gold += run.goldReward('normal'); run.gainTonic(run.tonicReward('normal')); pickReward(run, run.cardChoices(3)); }
     } else if (ch.type === 'wanted') {
       won = fight(run, ENCOUNTERS[run.chapter].elite.foes, {});
-      if (won) { run.afterFight(); run.gainKeepsake(run.randomKeepsake()); pickReward(run, run.cardChoices(3, 0.1)); }
+      if (won) { run.afterFight(); run.gainKeepsake(run.randomKeepsake()); run.gainTonic(run.tonicReward('elite')); pickReward(run, run.cardChoices(3, 0.1)); }
     } else if (ch.type === 'boss') {
       const b = ENCOUNTERS[run.chapter].boss;
       bossHp[run.chapter].push(run.hp / run.maxHp);

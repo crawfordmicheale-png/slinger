@@ -619,3 +619,25 @@ body.between #vignette { background: radial-gradient(ellipse at center, rgba(0,0
 .cylinder .chamber.r-dud { fill: #555 !important; }
 .tracer.silver { background: linear-gradient(90deg, #fff0, #e8eef2 30%, #fff); box-shadow: 0 0 12px #cfe0ff; }
 .tracer.holy { height: 4px; background: linear-gradient(90deg, #9fe3ff00, #9fe3ff 30%, #fff); box-shadow: 0 0 14px #9fe3ff; }
+
+/* ---------------------------------------------------------------- tonics, infamy, tricky demons */
+.tonic { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 6px; background: #0006; border: 1px solid #fff3; vertical-align: middle; }
+.tonic img { width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 1px 2px #000); }
+.tonic.empty { border-style: dashed; opacity: .35; }
+button.tonic { cursor: pointer; transition: transform .12s, box-shadow .12s; }
+button.tonic:hover { transform: translateY(-2px) scale(1.08); box-shadow: 0 0 10px #ffcf6a; }
+.satchel { display: flex; gap: 6px; justify-content: center; margin-bottom: 2px; }
+.hud-tonics { display: inline-flex; gap: 3px; }
+.hud-tonics .tonic { width: 26px; height: 26px; }
+.hud-tonics .tonic img { width: 22px; height: 22px; }
+.hud-infamy { font-family: var(--font-title); font-size: 13px; padding: 2px 8px; border-radius: 3px; border: 1px solid #fff3; cursor: help; }
+.hud-infamy.inf-0 { color: #c9b89a; }
+.hud-infamy.inf-1 { color: #ffcf6a; }
+.hud-infamy.inf-2 { color: #ff9a5a; border-color: #ff9a5a66; }
+.hud-infamy.inf-3 { color: #fff; background: var(--blood); }
+.intent.i-veil { color: #c38bff; border-color: #c38bff88; cursor: pointer; font-family: var(--font-title); }
+.intent.i-veil:disabled { cursor: not-allowed; opacity: .6; }
+.intent.i-veil .eye-ico { width: 16px; height: 11px; }
+.st-hostage { color: #fff; background: #7a1b1b; border-color: #ff8d7a66; }
+.keepsake-line .tonic { width: 30px; height: 30px; }
+@media (max-width: 760px) { .hud-tonics { display: none; } }

@@ -83,6 +83,11 @@ class Combat {
     this.shotsThisTurn = 0;   // Steady Aim
     this.fired = [];          // rounds fired by the card being played, consumed hit by hit
     this.firedThisCard = [];
+    this.curRound = null;     // the round riding on the hit being resolved
+    this.unveiled = false;    // Peyote Tea: every hidden intent is visible
+    this.lastAttack = null;   // the Chalk Wraith recites it back at you
+    this.freed = 0;           // hostages freed this fight
+    this.collected = [];      // cards the Gentleman took as payment
     this.enemies = [];
     foeIds.forEach(id => this.spawn(id));
 
@@ -117,7 +122,10 @@ class Combat {
       step: def.start === 'random' ? Math.floor(this.rng() * def.pattern.length) : 0,
       boss: !!def.boss, elite: !!def.elite, minion: !!def.minion,
       phase2Done: false, intent: null,
+      veiled: !!def.veiled, peeked: false,
+      hostage: def.hostage ? { ...def.hostage } : null,
     };
+    if (def.ward) e.st.ward = def.ward;
     this.enemies.push(e);
     this.chooseIntent(e);
     return e;
@@ -132,6 +140,32 @@ class Combat {
       key = e.pattern[e.step % e.pattern.length];
     }
     e.intent = Object.assign({ key }, def.moves[key]);
+    if (e.intent.mimic) e.intent.atk = this.lastAttack ? this.lastAttack.dmg : 6;
+  }
+
+  /** Is this demon's next move hidden from the player? */
+  hidden(e) { return e.veiled && !e.peeked && !this.unveiled; }
+
+  /** Spend a Veil Sight charge to see a veiled demon's next move for the rest of the fight. */
+  peek(uid) {
+    const e = this.byUid(uid);
+    if (!e || !this.hidden(e) || this.run.sight <= 0) return false;
+    this.run.sight--;
+    e.peeked = true;
+    this.emit({ type: 'peek', uid: e.uid });
+    this.say(`You look through the Veil. The ${e.name} means to: ${e.intent.n}.`);
+    return true;
+  }
+
+  /** Drink a tonic from the satchel. */
+  useTonic(i) {
+    const id = this.run.tonics[i];
+    if (!id || this.over) return false;
+    this.run.tonics.splice(i, 1);
+    this.say(`You use the ${TONICS[id].name}.`);
+    TONICS[id].use(this);
+    this.checkEnd();
+    return id;
   }
 
   // ---- damage math ------------------------------------------------------------
@@ -144,7 +178,20 @@ class Combat {
 
   damage(src, tgt, base) {
     if (!tgt || tgt.hp <= 0) return;
-    const d = this.calcDamage(src, tgt, base);
+    let d = this.calcDamage(src, tgt, base);
+    const holy = this.curRound === 'silver' || this.curRound === 'blessed';
+    if (src.isPlayer && tgt.st.ward) {
+      if (holy) { tgt.st.ward--; if (!tgt.st.ward) delete tgt.st.ward; this.emit({ type: 'ward', uid: tgt.uid }); }
+      else d = Math.floor(d / 2);
+    }
+    if (src.isPlayer && tgt.hostage && d >= tgt.hostage.threshold) {
+      this.emit({ type: 'hostage_dead', uid: tgt.uid });
+      this.say(`That shot went clean through. ${cap(tgt.hostage.name)} did not survive it.`);
+      tgt.hostage = null;
+      this.run.addCard('blood_on_hands');
+      this.run.innocents++;
+      this.run.addInfamy(2);
+    }
     const blocked = Math.min(tgt.block, d);
     tgt.block -= blocked;
     const through = d - blocked;
@@ -250,7 +297,9 @@ class Combat {
       dmg += R.bonus || 0;
       if (R.pierce && t.block) { this.emit({ type: 'pierce', uid: t.uid, n: t.block }); t.block = 0; }
     }
+    this.curRound = r;
     this.damage(this.p, t, dmg);
+    this.curRound = null;
     if (R && t.hp > 0 && R.onHit) R.onHit(this, t);
     if (R && R.splash) this.alive().filter(e => e !== t).forEach(e => this.damage(this.p, e, R.splash));
   }
@@ -271,7 +320,17 @@ class Combat {
     }
   }
   cover(n) { this.p.block += n; this.emit({ type: 'cover', uid: 'player', n }); }
-  apply(t, key, n) { if (t && t.hp > 0 && n > 0) { t.st[key] = (t.st[key] || 0) + n; this.emit({ type: 'status', uid: t.uid, key, n }); } }
+  apply(t, key, n) {
+    if (!(t && t.hp > 0 && n > 0)) return;
+    t.st[key] = (t.st[key] || 0) + n;
+    this.emit({ type: 'status', uid: t.uid, key, n });
+    if (key === 'exposed' && t.hostage) {
+      this.say(`The Veil tears and ${t.hostage.name} stumbles free.`);
+      this.emit({ type: 'hostage_freed', uid: t.uid });
+      t.hostage = null;
+      this.freed++;
+    }
+  }
   applyAll(key, n) { this.alive().forEach(e => this.apply(e, key, n)); }
   applySelf(key, n) { this.apply(this.p, key, n); }
   heal(n) { const before = this.p.hp; this.p.hp = Math.min(this.p.maxHp, this.p.hp + n); this.emit({ type: 'heal', uid: 'player', n: this.p.hp - before }); }
@@ -326,6 +385,10 @@ class Combat {
     this.say(`You play ${s.name}.`);
 
     s.def.play(this, s.v, target);
+    if (s.def.type === 'attack' && s.v.dmg) {
+      this.lastAttack = { name: s.name, dmg: s.v.dmg };
+      this.enemies.forEach(e => { if (e.intent && e.intent.mimic) e.intent.atk = s.v.dmg; });
+    }
 
     // Rounds a card fired but never "rode" a hit (e.g. two rounds behind one big shot)
     // still deliver their effects to the target.
@@ -401,6 +464,7 @@ class Combat {
     const b = ent.st.burn;
     if (!b) return;
     this.emit({ type: 'burn', uid: ent.uid, n: b });
+    if (ent.st.ward) { ent.st.ward--; if (!ent.st.ward) delete ent.st.ward; this.emit({ type: 'ward', uid: ent.uid }); }
     this.loseHp(ent, b);
     ent.st.burn = b - 1;
     if (!ent.st.burn) delete ent.st.burn;
@@ -425,6 +489,16 @@ class Combat {
     if (m.exposed) this.applySelf('exposed', m.exposed);
     if (m.burn) this.applySelf('burn', m.burn);
     if (m.curse) for (let i = 0; i < m.curse.n; i++) this.discard.push(newCard(m.curse.id));
+    if (m.collect) {
+      for (let i = 0; i < m.collect; i++) {
+        const pile = this.draw_.length ? this.draw_ : this.discard;
+        if (!pile.length) break;
+        const card = pile.splice(Math.floor(this.rng() * pile.length), 1)[0];
+        this.collected.push(card);
+        this.emit({ type: 'collect', uid: 'player', name: CARDS[card.id].name });
+        this.say(`The Gentleman takes ${CARDS[card.id].name} as payment. It's gone for this fight.`);
+      }
+    }
     if (m.tamper) { this.loadRound('dud', m.tamper); this.say(`${e.name} slips ${m.tamper} duds into your iron.`); }
     if (m.summon) for (let i = 0; i < m.summon.n; i++) if (this.alive().length < 5) this.spawn(m.summon.id);
   }
@@ -433,19 +507,21 @@ class Combat {
   intentInfo(e) {
     const m = e.intent; const out = [];
     if (!m) return out;
+    if (this.hidden(e)) return [{ kind: 'veil', label: '?' }];
     if (m.atk) {
       const d = this.calcDamage(e, this.p, m.atk);
       out.push({ kind: 'atk', label: m.hits > 1 ? `${d}×${m.hits}` : `${d}` });
     }
     if (m.block) out.push({ kind: 'def', label: `${m.block}` });
     if (m.wrath || m.heal) out.push({ kind: 'buff', label: m.heal ? `+${m.heal}` : '' });
-    if (m.shaken || m.exposed || m.burn || m.curse || m.tamper) out.push({ kind: 'debuff', label: '' });
+    if (m.shaken || m.exposed || m.burn || m.curse || m.tamper || m.collect) out.push({ kind: 'debuff', label: '' });
     if (m.summon) out.push({ kind: 'summon', label: '' });
     return out;
   }
 
   intentText(e) {
     const m = e.intent; if (!m) return '';
+    if (this.hidden(e)) return 'Its intent is hidden behind the Veil. Click to spend 1 Veil Sight and see it for the rest of the fight.';
     const bits = [];
     if (m.atk) bits.push(`attack for ${this.calcDamage(e, this.p, m.atk)}${m.hits > 1 ? ' × ' + m.hits : ''}`);
     if (m.block) bits.push(`guard ${m.block}`);
@@ -456,6 +532,8 @@ class Combat {
     if (m.burn) bits.push(`Hellfire ${m.burn}`);
     if (m.curse) bits.push(`shuffle ${m.curse.n} ${CARDS[m.curse.id].name} into your discard`);
     if (m.tamper) bits.push(`slip ${m.tamper} duds into your next chambers`);
+    if (m.collect) bits.push(`take ${m.collect} card from your deck for this fight`);
+    if (m.mimic) bits.push(this.lastAttack ? `recite your ${this.lastAttack.name} back at you` : 'recite your last attack back at you');
     if (m.summon) bits.push(`summon ${m.summon.n} ${ENEMIES[m.summon.id].name}${m.summon.n > 1 ? 's' : ''}`);
     return `${m.n}: ${bits.join(', ')}.`;
   }
@@ -507,13 +585,16 @@ class Run {
     this.flags = {};    // story choices: remembered, confessed, forgiven, vow
     this.journal = [];  // { chapter, title, text }
     this.belt = STARTING_BELT.slice(); // the load you start every fight with, chamber by chamber
+    this.tonics = ['miracle'];         // the satchel, up to TONIC_SLOTS
+    this.infamy = 0;
     this.removals = 0;
     this.choices = this.genChoices();
   }
 
   // ---- saving ---------------------------------------------------------------------
   static SAVE_FIELDS = ['hp', 'maxHp', 'gold', 'sight', 'maxSight', 'deck', 'keepsakes', 'chapter', 'step',
-    'usedTowns', 'usedEvents', 'kills', 'innocents', 'flags', 'journal', 'belt', 'removals', 'choices'];
+    'usedTowns', 'usedEvents', 'kills', 'innocents', 'flags', 'journal', 'belt', 'removals', 'choices',
+    'tonics', 'infamy'];
 
   toJSON() {
     const o = { v: 1 };
@@ -531,6 +612,18 @@ class Run {
   }
 
   has(k) { return this.keepsakes.includes(k); }
+
+  addInfamy(n) { this.infamy = Math.max(0, Math.min(INFAMY.max, this.infamy + n)); }
+
+  /** Put a tonic in the satchel if there's room. */
+  gainTonic(id) {
+    if (!id || this.tonics.length >= TONIC_SLOTS) return false;
+    this.tonics.push(id);
+    return true;
+  }
+  randomTonic() { return pick(this.rng, Object.keys(TONICS)); }
+  /** A tonic found after a fight, or null: 35% after a town fight, always after elites and bosses. */
+  tonicReward(kind) { return kind !== 'normal' || this.rng() < 0.35 ? this.randomTonic() : null; }
 
   addJournal(title, text) {
     if (!this.journal.some(j => j.title === title)) this.journal.push({ chapter: this.chapter, title, text });
@@ -652,7 +745,7 @@ class Run {
     return {
       name: this.townName(), folk, enc, scene,
       victim: pick(this.rng, CASE.victims),
-      questions: 5 + (this.has('lawmans_notebook') ? 2 : 0),
+      questions: 5 + (this.has('lawmans_notebook') ? 2 : 0) - (this.infamy >= 4 ? 1 : 0) - (this.infamy >= 7 ? 1 : 0),
       usedSight: false,
     };
   }
@@ -688,14 +781,18 @@ class Run {
   makeShop() {
     const cards = this.cardChoices(5, 0.06).map(id => ({ id, price: priceFor(CARDS[id].rarity, this.rng), sold: false }));
     const k = this.randomKeepsake();
+    const markup = p => Math.round(p * (1 + 0.06 * this.infamy));
+    cards.forEach(c => { c.price = markup(c.price); });
     const rounds = shuffle(this.rng, SPECIAL_ROUNDS.slice()).slice(0, 2)
-      .map(id => ({ id, price: ROUNDS[id].price + randInt(this.rng, -3, 5), sold: false }));
+      .map(id => ({ id, price: markup(ROUNDS[id].price + randInt(this.rng, -3, 5)), sold: false }));
+    const tonics = shuffle(this.rng, Object.keys(TONICS)).slice(0, 2)
+      .map(id => ({ id, price: markup(TONICS[id].price + randInt(this.rng, -3, 4)), sold: false }));
     return {
-      cards, rounds,
-      keepsake: k ? { id: k, price: randInt(this.rng, 130, 160), sold: false } : null,
-      removePrice: 60 + (this.removals || 0) * 20,
-      healPrice: 30,
-      sightPrice: 25,
+      cards, rounds, tonics,
+      keepsake: k ? { id: k, price: markup(randInt(this.rng, 130, 160)), sold: false } : null,
+      removePrice: markup(60 + (this.removals || 0) * 20),
+      healPrice: markup(30),
+      sightPrice: markup(25),
     };
   }
 }

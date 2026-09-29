@@ -78,7 +78,9 @@ function renderHUD() {
       <span class="hud-name">${HERO.name}</span>
       <span class="hud-hp" data-tip="Health">♥ ${hp}/${r.maxHp}</span>
       <span class="hud-gold" data-tip="Gold">$ ${r.gold}</span>
-      <span class="hud-sight" data-tip="Veil Sight: look through a stranger's skin to see what they really are. Restored at camp.">${eyes}</span>
+      <span class="hud-sight" data-tip="Veil Sight: look through a stranger's skin to see what they really are, or see a veiled demon's next move. Restored at camp.">${eyes}</span>
+      <span class="hud-infamy inf-${r.infamy >= 7 ? 3 : r.infamy >= 4 ? 2 : r.infamy >= 1 ? 1 : 0}" data-tip="${esc(INFAMY.desc(r.infamy))}">${INFAMY.label(r.infamy)} ${r.infamy}</span>
+      <span class="hud-tonics" data-tip="${esc(r.tonics.length ? 'Tonics: ' + r.tonics.map(t => TONICS[t].name).join(', ') + '. Use them during a fight.' : 'No tonics in your satchel.')}">${tonicIcons(r.tonics, false)}</span>
     </div>
     <div class="hud-mid">${r.chapter <= 3 ? CHAPTERS[r.chapter].title : ''}</div>
     <div class="hud-right">
@@ -88,6 +90,17 @@ function renderHUD() {
       <button class="btn small" data-act="view-deck">Deck (${r.deck.length})</button>
       ${soundButtons()}
     </div>`;
+}
+
+function tonicIcons(list, usable) {
+  return Array.from({ length: TONIC_SLOTS }, (_, i) => {
+    const id = list[i];
+    if (!id) return `<span class="tonic empty"></span>`;
+    const inner = `<img src="art/tonics/${id}.webp" alt="${esc(TONICS[id].name)}" onerror="this.replaceWith(document.createTextNode('⚱'))">`;
+    return usable
+      ? `<button class="tonic" data-act="tonic" data-i="${i}" data-tip="${esc(TONICS[id].name + ': ' + TONICS[id].desc)}" aria-label="${esc(TONICS[id].name)}">${inner}</button>`
+      : `<span class="tonic">${inner}</span>`;
+  }).join('');
 }
 
 function soundButtons() {
@@ -272,13 +285,17 @@ const SCREENS = {
     const selCard = S.sel !== null ? c.hand[S.sel] : null;
     const targeting = selCard && c.needsTarget(selCard);
     const enemies = c.enemies.map(e => {
-      const chips = c.intentInfo(e).map(i => `<span class="intent i-${i.kind}">${INTENT_ICON[i.kind]}${i.label}</span>`).join('');
+      const chips = c.intentInfo(e).map(i => i.kind === 'veil'
+        ? `<button class="intent i-veil" data-act="peek" data-uid="${e.uid}" ${S.run.sight > 0 ? '' : 'disabled'}>${ART.eye(true)} ?</button>`
+        : `<span class="intent i-${i.kind}">${INTENT_ICON[i.kind]}${i.label}</span>`).join('');
+      const hostage = e.hostage && e.hp > 0
+        ? `<span class="st st-hostage" data-tip="${esc(`Holding ${e.hostage.name}. Any single hit of ${e.hostage.threshold} or more damage kills them. Exposing the demon frees them.`)}">Hostage · ${e.hostage.threshold}+ kills</span>` : '';
       return `<div class="foe ${e.hp <= 0 ? 'dead' : ''} ${targeting && e.hp > 0 ? 'targetable' : ''} ${e.boss ? 'is-boss' : ''} ${e.minion ? 'is-minion' : ''}" data-uid="${e.uid}" data-act="${targeting && e.hp > 0 ? 'target' : ''}">
         <div class="intents" data-tip="${esc(c.intentText(e))}">${e.hp > 0 ? chips : ''}</div>
         <div class="foe-art">${ART.demonArt(e.id)}</div>
         <div class="foe-name">${esc(e.name)}</div>
         ${barHTML(e.hp, e.maxHp, e.block)}
-        <div class="statuses">${statusHTML(e.st)}</div>
+        <div class="statuses">${hostage}${statusHTML(e.st)}</div>
       </div>`;
     }).join('');
 
@@ -328,6 +345,7 @@ const SCREENS = {
           </div>
           <div class="hand">${hand}</div>
           <div class="piles">
+            <div class="satchel" aria-label="Tonics">${tonicIcons(S.run.tonics, !S.busy)}</div>
             <button class="pile" data-act="view-pile" data-pile="draw_">Draw ${c.draw_.length}</button>
             <button class="pile" data-act="view-pile" data-pile="discard">Discard ${c.discard.length}</button>
             ${c.exhausted.length ? `<button class="pile" data-act="view-pile" data-pile="exhausted">Gone ${c.exhausted.length}</button>` : ''}
@@ -347,6 +365,9 @@ const SCREENS = {
         <div class="loot">
           <div class="loot-line">+${rw.gold} gold</div>
           ${rw.clean ? '<div class="loot-note">Clean work, Marshal. You cracked it without the Veil. (+25 bounty)</div>' : ''}
+          ${rw.freed ? `<div class="loot-note">The hostage you freed presses a few coins on you and runs for home. (+${15 * rw.freed} gold, less Infamy)</div>` : ''}
+          ${rw.tonic ? `<div class="loot-line keepsake-line">${tonicIcons([rw.tonic], false).split('<span class="tonic empty">')[0]} <b>${esc(TONICS[rw.tonic].name)}</b> — ${esc(TONICS[rw.tonic].desc)}</div>` : ''}
+          ${rw.tonicLost ? `<div class="loot-note">You find ${esc(TONICS[rw.tonicLost].name)}, but your satchel is full.</div>` : ''}
           ${rw.keepsake ? `<div class="loot-line keepsake-line">${keepsakeHTML(rw.keepsake)} <b>${esc(KEEPSAKES[rw.keepsake].name)}</b> — ${esc(KEEPSAKES[rw.keepsake].desc)}</div>` : ''}
         </div>
         ${rw.cards && !rw.cardTaken ? `
@@ -386,6 +407,7 @@ const SCREENS = {
             : cardHTML({ id: c.id, up: false }, { price: c.price, cls: r.gold >= c.price ? 'pickable' : 'too-pricey', attrs: `data-act="buy-card" data-i="${i}"` })).join('')}
         </div>
         <div class="services">
+          ${sh.tonics.map((tn, i) => tn.sold ? '' : `<button class="btn" data-act="buy-tonic" data-i="${i}" ${r.gold >= tn.price && r.tonics.length < TONIC_SLOTS ? '' : 'disabled'}>${esc(TONICS[tn.id].name)} — ${tn.price}g<br><small>${esc(TONICS[tn.id].desc)}${r.tonics.length >= TONIC_SLOTS ? ' (Satchel full.)' : ''}</small></button>`).join('')}
           ${sh.rounds.map((rd, i) => rd.sold ? '' : `<button class="btn" data-act="buy-round" data-i="${i}" ${r.gold >= rd.price ? '' : 'disabled'}><span class="round-chip" style="background:${ROUNDS[rd.id].color}"></span> Box of ${ROUNDS[rd.id].name} rounds — ${rd.price}g<br><small>${esc(ROUNDS[rd.id].desc)} Goes in your gun belt.</small></button>`).join('')}
           ${sh.keepsake && !sh.keepsake.sold ? `<button class="btn" data-act="buy-keepsake" ${r.gold >= sh.keepsake.price ? '' : 'disabled'}>${keepsakeHTML(sh.keepsake.id)} ${esc(KEEPSAKES[sh.keepsake.id].name)} — ${sh.keepsake.price}g<br><small>${esc(KEEPSAKES[sh.keepsake.id].desc)}</small></button>` : ''}
           <button class="btn" data-act="buy-remove" ${r.gold >= sh.removePrice && !sh.removed ? '' : 'disabled'}>Burn a card — ${sh.removePrice}g<br><small>Remove a card from your deck</small></button>
@@ -406,7 +428,7 @@ const SCREENS = {
         <p>${esc(ev.text)}</p>
         ${S.eventResult ? `<p class="result">${esc(S.eventResult)}</p><div class="row center"><button class="btn big" data-act="leave">Ride on</button></div>` : `
         <div class="options">
-          ${ev.options.map((o, i) => `<button class="btn option" data-act="event-opt" data-i="${i}" ${!o.req || o.req(r) ? '' : 'disabled'}>${esc(o.label)}</button>`).join('')}
+          ${ev.options.map((o, i) => `<button class="btn option" data-act="event-opt" data-i="${i}" ${!o.req || o.req(r) ? '' : 'disabled'}>${esc(typeof o.label === 'function' ? o.label(r) : o.label)}</button>`).join('')}
         </div>`}
       </section>`;
   },
@@ -462,7 +484,7 @@ const SCREENS = {
       <div class="kicker">Ending</div>
       <h2>${esc(e.title)}</h2>
       ${e.text.map(p => `<p>${esc(p)}</p>`).join('')}
-      <p class="stats">Demons sent back: ${S.run.kills} · Innocents wronged: ${S.run.innocents} · Journal entries: ${S.run.journal.length}</p>
+      <p class="stats">Demons sent back: ${S.run.kills} · Innocents wronged: ${S.run.innocents} · Infamy: ${S.run.infamy} · Journal entries: ${S.run.journal.length}</p>
       <button class="btn big" data-act="title">The End</button>
     </section>`;
   },
@@ -524,6 +546,10 @@ function pickNode(i) {
       break;
     case 'post': S.shop = r.makeShop(); setScreen('post'); break;
     case 'trail': {
+      // A bad reputation rides out to meet you.
+      if (r.infamy >= 3 && r.rng() < r.infamy * 0.08) {
+        S.event = POSSE_EVENT; S.eventResult = null; setScreen('event'); break;
+      }
       let pool = EVENTS.filter(e => !r.usedEvents.includes(e.id));
       if (!pool.length) { r.usedEvents = []; pool = EVENTS; }
       S.event = pick(r.rng, pool);
@@ -630,11 +656,16 @@ function winFight() {
   const kind = S.fightKind;
   let gold = r.goldReward(kind);
   const clean = kind === 'normal' && S.cleanSolve;
-  if (clean) gold += 25;
+  if (clean) { gold += 25; r.addInfamy(-1); }
   S.cleanSolve = false;
+  const freed = c.freed; // hostages pay you back
+  if (freed) { gold += 15 * freed; r.addInfamy(-freed); }
   r.gold += gold;
   let keepsake = null;
   if (kind === 'elite') { keepsake = r.randomKeepsake(); r.gainKeepsake(keepsake); }
+  const found = r.tonicReward(kind);
+  const tonic = found && r.gainTonic(found) ? found : null;
+  const tonicLost = found && !tonic ? found : null;
   if (kind === 'boss') {
     keepsake = ENCOUNTERS[r.chapter].boss.reward;
     if (keepsake) r.gainKeepsake(keepsake);
@@ -647,7 +678,7 @@ function winFight() {
     clean,
     text: kind === 'boss' ? '' : kind === 'normal' && S.guilt ? `The town buries ${S.guilt} in the morning. You do not stay for it.`
       : kind === 'normal' ? pick(r.rng, THANKS) : 'The Between lets go of you. The street is just a street again.',
-    gold, keepsake,
+    gold, keepsake, tonic, tonicLost, freed,
     cards: r.cardChoices(3, kind === 'elite' ? 0.1 : kind === 'boss' ? 0.3 : 0),
     cardTaken: null,
   };
@@ -682,6 +713,11 @@ function afterCombatRender() {
     }
     else if (e.type === 'die') { dissolve(el); AUDIO.sfx('death'); continue; }
     else if (e.type === 'dud') { text = 'Click. Dud.'; cls = 'blocked'; }
+    else if (e.type === 'ward') { text = 'Ward broken'; cls = 'buff'; }
+    else if (e.type === 'hostage_dead') { text = 'The hostage is dead'; cls = 'dmg'; AUDIO.sfx('wrong', delay / 1000); }
+    else if (e.type === 'hostage_freed') { text = 'Hostage freed!'; cls = 'heal'; AUDIO.sfx('heal', delay / 1000); }
+    else if (e.type === 'collect') { text = `Collected: ${e.name}`; cls = 'debuff'; }
+    else if (e.type === 'peek') { text = 'Seen'; cls = 'debuff'; }
     else if (e.type === 'pierce') { text = 'Cover burned away'; cls = 'buff'; }
     else if (e.type === 'burn') { text = `-${e.n} 🔥`; cls = 'dmg burn'; AUDIO.sfx('burn', delay / 1000); }
     else if (e.type === 'heal' && e.n) { text = `+${e.n}`; cls = 'heal'; }
@@ -1012,6 +1048,8 @@ function howToPlay() {
       <p><b>Towns.</b> Somebody vanished last night, and one of the three strangers is a demon. You get a few questions: ask where they were, what they saw, or just watch them. Humans tell the truth. The demon lies, and it will try to frame someone. Or spend <b>Veil Sight</b> ${ART.eye(true)} to look through a stranger's skin and know for sure. Solve it without the Veil and the bounty is bigger. Draw on the demon and it starts <b>Exposed</b>. Draw on an innocent and you carry a curse card, and the real demon strikes first.</p>
       <p><b>Your iron.</b> Each of the six chambers holds a round: Lead, Silver, Hellfire, Blessed or Buckshot. Shot cards fire the next loaded round, and its effect rides on that shot. Your <b>Gun Belt</b> is how the gun is loaded at the start of every fight and what Reload puts back. Buy special rounds at trading posts and arrange them in the order you want them.</p>
       <p><b>The Between.</b> Every fight happens in the Between: the same town, only wrong.</p>
+      <p><b>Tricky demons.</b> Some hide their next move behind the Veil: click the ? to spend Sight and see it. Some hold a hostage: one big hit kills the hostage too, but Exposing the demon frees them. Warded demons shrug off half of every hit that isn't a Silver or Blessed round. And the Gentleman takes cards from your deck as payment.</p>
+      <p><b>Tonics and Infamy.</b> Carry up to three tonics and drink them in a fight. Accuse the wrong person or run from a town and your <b>Infamy</b> climbs: prices go up, folks answer fewer questions, and posses ride out after you. Clean detective work brings it back down.</p>
       <p><b>Grit</b> pays for cards and refills every turn. Shot cards (the ones with bullet pips) spend rounds, and rounds do <i>not</i> refill on their own. Play <b>Reload</b>.</p>
       <p><b>Cover</b> absorbs damage and fades at the start of your turn. Watch the icons over each demon: they show what it will do next.</p>
       <p><b>Wrath</b> adds damage to every hit. <b>Exposed</b> takes 50% more damage. <b>Shaken</b> deals 25% less. <b>Hellfire</b> burns every turn.</p>
@@ -1097,6 +1135,7 @@ const ACTIONS = {
       S.cleanSolve = false;
       r.innocents++;
       S.guilt = f.name;
+      r.addInfamy(3);
       AUDIO.sfx('wrong');
       r.addCard('blood_on_hands');
       r.hp = Math.max(1, r.hp - 6);
@@ -1105,7 +1144,7 @@ const ACTIONS = {
       render();
     }
   },
-  'leave-town': () => { S.cleanSolve = false; startFight(S.town.enc.foes, 'normal', { ambushed: true }); },
+  'leave-town': () => { S.cleanSolve = false; S.run.addInfamy(1); startFight(S.town.enc.foes, 'normal', { ambushed: true }); },
   'fight-elite': () => startFight(ENCOUNTERS[S.run.chapter].elite.foes, 'elite'),
   'fight-boss': () => startFight(ENCOUNTERS[S.run.chapter].boss.foes, 'boss'),
 
@@ -1113,6 +1152,23 @@ const ACTIONS = {
   'card': el => clickCard(+el.dataset.i),
   'target': el => clickTarget(el.dataset.uid),
   'end-turn': endTurn,
+  'tonic': el => {
+    const c = S.combat;
+    if (S.busy || !c || c.over) return;
+    const id = c.useTonic(+el.dataset.i);
+    if (!id) return;
+    AUDIO.sfx(TONICS[id].sfx || 'heal');
+    const hero = app.querySelector('.hero-art');
+    if (hero) burst(centerOf(hero), id === 'dynamite' ? 'muzzle' : 'aura');
+    if (id === 'dynamite') { quake(); app.querySelectorAll('.foe:not(.dead) .foe-art').forEach(f => burst(centerOf(f), 'spark')); }
+    render();
+  },
+  'peek': el => {
+    const c = S.combat;
+    if (S.busy || !c || !c.peek(el.dataset.uid)) return;
+    AUDIO.sfx('sight');
+    render();
+  },
 
   // reward
   'take-card': el => {
@@ -1158,6 +1214,14 @@ const ACTIONS = {
     r.gold -= item.price; item.sold = true; r.addCard(item.id);
     AUDIO.sfx('coin');
     S.flash = `"${CARDS[item.id].name}. Good choice." She counts your coins twice.`;
+    render();
+  },
+  'buy-tonic': el => {
+    const r = S.run; const tn = S.shop.tonics[+el.dataset.i];
+    if (tn.sold || r.gold < tn.price || !r.gainTonic(tn.id)) return;
+    r.gold -= tn.price; tn.sold = true;
+    AUDIO.sfx('coin');
+    S.flash = `The ${TONICS[tn.id].name} goes in your satchel.`;
     render();
   },
   'buy-round': el => {
