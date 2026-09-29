@@ -84,6 +84,7 @@ function renderHUD() {
     <div class="hud-right">
       <span class="keepsakes">${r.keepsakes.map(keepsakeHTML).join('')}</span>
       <button class="btn small" data-act="journal">Journal (${r.journal.length})</button>
+      ${S.screen !== 'combat' ? '<button class="btn small" data-act="belt">Gun Belt</button>' : ''}
       <button class="btn small" data-act="view-deck">Deck (${r.deck.length})</button>
       ${soundButtons()}
     </div>`;
@@ -119,6 +120,8 @@ const replay = id => `<button class="btn small replay" data-act="voice" data-id=
 function setScreen(name) {
   const prev = S.screen;
   S.screen = name;
+  if (name === 'map' || name === 'chapterIntro') saveRun();
+  if (name === 'gameover' || name === 'victory') clearSave();
   AUDIO.music(musicFor(name));
   if (name !== prev) AUDIO.voice(voiceFor(name));
   S.sel = null;
@@ -145,7 +148,11 @@ const SCREENS = {
       <h1 class="logo">Slinger</h1>
       <p class="tag">A frontier deckbuilder of demons and vengeance</p>
       <div class="menu">
-        <button class="btn big" data-act="new-run">Ride Out</button>
+        ${(() => {
+          const sv = loadSave();
+          return sv ? `<button class="btn big" data-act="continue">Continue<br><small>${esc(CHAPTERS[Math.min(3, sv.chapter)].title)} · ♥ ${sv.hp}/${sv.maxHp}</small></button>` : '';
+        })()}
+        <button class="btn ${loadSave() ? '' : 'big'}" data-act="new-run">${loadSave() ? 'New Hunt' : 'Ride Out'}</button>
         <button class="btn" data-act="how">How to Play</button>
         <div class="title-sound">${soundButtons()}</div>
       </div>
@@ -188,15 +195,27 @@ const SCREENS = {
   town: () => {
     const t = S.town;
     const r = S.run;
+    const qLeft = t.questions;
+    const dots = Array.from({ length: t.questionsMax }, (_, i) => `<span class="qdot ${i < qLeft ? 'on' : ''}"></span>`).join('');
+    const ask = (f, i, q, label) => `<button class="btn small ask" data-act="ask" data-i="${i}" data-q="${q}" ${f.asked[q] || qLeft <= 0 ? 'disabled' : ''}>${label}</button>`;
     const person = (f, i) => {
       const reveal = f.seen ? (f.demon ? 'demon' : 'human') : null;
+      const clues = [`<li>${esc(f.tells[0])}</li>`];
+      if (f.asked.alibi) clues.push(`<li class="clue"><b>Last night:</b> ${esc(f.alibi)}</li>`);
+      if (f.asked.saw) clues.push(`<li class="clue"><b>Saw:</b> ${esc(f.saw)}</li>`);
+      if (f.asked.watch) clues.push(`<li class="clue"><b>Watching:</b> ${esc(f.tells[1])}</li>`);
       return `<div class="folk ${f.gone ? 'gone' : ''} ${reveal ? 'seen-' + reveal : ''}">
         <div class="portrait">${ART.folkArt(f, f.demon && f.seen ? t.enc.foes[0] : null, i + t.name.length)}</div>
         <div class="folk-name">${esc(f.name)}</div>
         <div class="folk-role">the ${esc(f.role)}</div>
-        <ul class="tells">${f.tells.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+        <ul class="tells">${clues.join('')}</ul>
         ${f.seen ? `<div class="verdict">${f.demon ? 'DEMON — ' + esc(ENEMIES[t.enc.foes[0]].name) : 'Human. Just a person.'}</div>` : ''}
         ${f.gone ? '<div class="verdict bad">You were wrong.</div>' : `
+        <div class="folk-questions">
+          ${ask(f, i, 'alibi', 'Where were you?')}
+          ${ask(f, i, 'saw', 'What did you see?')}
+          ${ask(f, i, 'watch', 'Watch them')}
+        </div>
         <div class="folk-actions">
           ${!f.seen ? `<button class="btn small" data-act="look" data-i="${i}" ${r.sight > 0 ? '' : 'disabled'}>${ART.eye(true)} Look (${r.sight})</button>` : ''}
           <button class="btn small danger" data-act="accuse" data-i="${i}">Draw on them</button>
@@ -206,7 +225,11 @@ const SCREENS = {
     return `
       <section class="town">
         <h2>${esc(t.name)}</h2>
-        <p class="sub">Three strangers catch your eye. One of them is wearing somebody else's skin.</p>
+        <p class="sub">Last night ${esc(t.victim)} vanished near ${esc(t.scene)}. One of these three is wearing somebody else's skin.</p>
+        <div class="casebar">
+          <span class="qleft" data-tip="Each question costs one. Humans tell the truth. The demon lies, and it will try to frame someone.">Questions ${dots}</span>
+          <span class="hint">Humans tell the truth. The demon lies. Crack it without the Veil for a bigger bounty.</span>
+        </div>
         ${S.flash ? `<p class="flash">${esc(S.flash)}</p>` : ''}
         <div class="folks">${t.folk.map(person).join('')}</div>
         <div class="row center">
@@ -259,11 +282,17 @@ const SCREENS = {
       </div>`;
     }).join('');
 
+    const nextI = c.nextLoaded();
     const chambers = Array.from({ length: p.maxRounds }, (_, i) => {
-      const a = (i / p.maxRounds) * Math.PI * 2 - Math.PI / 2;
+      // The chamber that fires next sits at the top; the rest follow clockwise.
+      const k = (i - (nextI < 0 ? p.pos : nextI) + p.maxRounds) % p.maxRounds;
+      const a = (k / p.maxRounds) * Math.PI * 2 - Math.PI / 2;
       const x = 50 + Math.cos(a) * 30, y = 50 + Math.sin(a) * 30;
-      return `<circle class="chamber ${i < p.rounds ? 'loaded' : ''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="11"/>`;
+      const r = p.chambers[i];
+      return `<circle class="chamber ${r ? 'loaded r-' + r : ''} ${i === nextI ? 'next' : ''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.maxRounds > 6 ? 9 : 11}" ${r ? `style="fill:${ROUNDS[r].color}"` : ''}/>`;
     }).join('');
+    const order = c.peekRounds(p.maxRounds);
+    const cylTip = order.length ? 'Fires in this order: ' + order.map(r => ROUNDS[r].name).join(' → ') + '. Reload refills empty chambers from your gun belt.' : 'Empty. Play Reload.';
 
     const hand = c.hand.map((card, i) => {
       const ok = c.canPlay(card).ok;
@@ -292,9 +321,9 @@ const SCREENS = {
         <div class="tray">
           <div class="gauges">
             <div class="grit" data-tip="Grit: spend it to play cards. Refills every turn."><span>${p.grit}</span><small>/${p.maxGrit}</small><label>Grit</label></div>
-            <div class="cylinder" data-tip="Rounds loaded in your revolver. Shot cards spend Rounds. Play Reload to fill every chamber.">
+            <div class="cylinder" data-tip="${esc(cylTip)}">
               <svg viewBox="0 0 100 100"><circle class="cyl" cx="50" cy="50" r="46"/>${chambers}<circle class="pin" cx="50" cy="50" r="6"/></svg>
-              <label>${p.rounds}/${p.maxRounds} Rounds</label>
+              <label>${order.length ? 'Next: ' + ROUNDS[order[0]].name : 'Empty'} · ${p.rounds}/${p.maxRounds}</label>
             </div>
           </div>
           <div class="hand">${hand}</div>
@@ -317,6 +346,7 @@ const SCREENS = {
         <p class="sub">${esc(rw.text || '')}</p>
         <div class="loot">
           <div class="loot-line">+${rw.gold} gold</div>
+          ${rw.clean ? '<div class="loot-note">Clean work, Marshal. You cracked it without the Veil. (+25 bounty)</div>' : ''}
           ${rw.keepsake ? `<div class="loot-line keepsake-line">${keepsakeHTML(rw.keepsake)} <b>${esc(KEEPSAKES[rw.keepsake].name)}</b> — ${esc(KEEPSAKES[rw.keepsake].desc)}</div>` : ''}
         </div>
         ${rw.cards && !rw.cardTaken ? `
@@ -356,6 +386,7 @@ const SCREENS = {
             : cardHTML({ id: c.id, up: false }, { price: c.price, cls: r.gold >= c.price ? 'pickable' : 'too-pricey', attrs: `data-act="buy-card" data-i="${i}"` })).join('')}
         </div>
         <div class="services">
+          ${sh.rounds.map((rd, i) => rd.sold ? '' : `<button class="btn" data-act="buy-round" data-i="${i}" ${r.gold >= rd.price ? '' : 'disabled'}><span class="round-chip" style="background:${ROUNDS[rd.id].color}"></span> Box of ${ROUNDS[rd.id].name} rounds — ${rd.price}g<br><small>${esc(ROUNDS[rd.id].desc)} Goes in your gun belt.</small></button>`).join('')}
           ${sh.keepsake && !sh.keepsake.sold ? `<button class="btn" data-act="buy-keepsake" ${r.gold >= sh.keepsake.price ? '' : 'disabled'}>${keepsakeHTML(sh.keepsake.id)} ${esc(KEEPSAKES[sh.keepsake.id].name)} — ${sh.keepsake.price}g<br><small>${esc(KEEPSAKES[sh.keepsake.id].desc)}</small></button>` : ''}
           <button class="btn" data-act="buy-remove" ${r.gold >= sh.removePrice && !sh.removed ? '' : 'disabled'}>Burn a card — ${sh.removePrice}g<br><small>Remove a card from your deck</small></button>
           <button class="btn" data-act="buy-heal" ${r.gold >= sh.healPrice && r.hp < r.maxHp ? '' : 'disabled'}>Hot meal &amp; a bath — ${sh.healPrice}g<br><small>Heal 20 HP</small></button>
@@ -461,6 +492,7 @@ const INTENT_ICON = { atk: '⚔ ', def: '⛨ ', buff: '▲ ', debuff: '☠ ', su
 // Flow
 // ---------------------------------------------------------------------------
 function newRun() {
+  clearSave();
   S.run = new Run();
   S.combat = null;
   setScreen('intro');
@@ -472,7 +504,13 @@ function pickNode(i) {
   S.flash = '';
   S.campDone = false;
   switch (c.type) {
-    case 'town': S.town = r.makeTown(); S.guilt = null; setScreen('town'); break;
+    case 'town':
+      S.town = r.makeTown();
+      S.town.questionsMax = S.town.questions;
+      S.guilt = null;
+      S.cleanSolve = false;
+      setScreen('town');
+      break;
     case 'wanted': setScreen('wanted'); break;
     case 'camp':
       r.sight = r.maxSight;
@@ -497,6 +535,51 @@ function pickNode(i) {
     case 'boss': setScreen('boss'); break;
   }
   AUDIO.sfx('deal');
+}
+
+// ---- gun belt ------------------------------------------------------------------
+// Swap two chambers by clicking them in turn, or (when buying) pick one to replace.
+function showBelt(title, onPick) {
+  S.beltPick = onPick || null;
+  S.beltSel = null;
+  S.beltTitle = title || 'Gun Belt';
+  renderBelt();
+}
+function renderBelt() {
+  const belt = S.run.belt;
+  openModal(`
+    <h3>${esc(S.beltTitle)}</h3>
+    <p class="sub center">${S.beltPick ? 'Pick the chamber to replace.' : 'This is how your iron is loaded at the start of every fight, and what Reload puts back. Rounds fire in this order. Click two chambers to swap them.'}</p>
+    <div class="belt">
+      ${belt.map((rd, i) => `<button class="belt-slot ${S.beltSel === i ? 'sel' : ''}" data-act="belt-slot" data-i="${i}">
+        <span class="belt-n">${i + 1}</span>
+        <b style="--chip:${ROUNDS[rd].color}">${esc(ROUNDS[rd].name)}</b><small>${esc(ROUNDS[rd].desc)}</small>
+      </button>`).join('')}
+    </div>
+    <div class="row center"><button class="btn" data-act="close-modal">${S.beltPick ? 'Never mind' : 'Done'}</button></div>`);
+}
+function beltClick(i) {
+  if (S.beltPick) { const f = S.beltPick; S.beltPick = null; f(i); return; }
+  const belt = S.run.belt;
+  if (S.beltSel === null) { S.beltSel = i; }
+  else { [belt[S.beltSel], belt[i]] = [belt[i], belt[S.beltSel]]; S.beltSel = null; AUDIO.sfx('deal'); saveRun(); }
+  renderBelt();
+}
+
+// ---- save & continue --------------------------------------------------------------
+// The run is saved in this browser at every stop on the trail map.
+const SAVE_KEY = 'slinger.save.v1';
+function saveRun() { try { if (S.run) localStorage.setItem(SAVE_KEY, JSON.stringify(S.run)); } catch (e) { /* storage unavailable */ } }
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage unavailable */ } }
+function loadSave() {
+  try { const raw = localStorage.getItem(SAVE_KEY); return raw ? Run.fromJSON(JSON.parse(raw)) : null; } catch (e) { return null; }
+}
+function continueRun() {
+  const r = loadSave();
+  if (!r) { setScreen('title'); return; }
+  S.run = r;
+  S.combat = null;
+  setScreen('map');
 }
 
 function showChapterIntro() {
@@ -545,7 +628,10 @@ function winFight() {
   c.finish();
   r.afterFight();
   const kind = S.fightKind;
-  const gold = r.goldReward(kind);
+  let gold = r.goldReward(kind);
+  const clean = kind === 'normal' && S.cleanSolve;
+  if (clean) gold += 25;
+  S.cleanSolve = false;
   r.gold += gold;
   let keepsake = null;
   if (kind === 'elite') { keepsake = r.randomKeepsake(); r.gainKeepsake(keepsake); }
@@ -558,6 +644,7 @@ function winFight() {
   if (kind === 'boss' && r.chapter === 3) { setScreen('finale'); return; }
   S.reward = {
     title: kind === 'boss' ? 'Vengeance' : kind === 'elite' ? 'Bounty Collected' : 'Back Through the Veil',
+    clean,
     text: kind === 'boss' ? '' : kind === 'normal' && S.guilt ? `The town buries ${S.guilt} in the morning. You do not stay for it.`
       : kind === 'normal' ? pick(r.rng, THANKS) : 'The Between lets go of you. The street is just a street again.',
     gold, keepsake,
@@ -594,6 +681,8 @@ function afterCombatRender() {
       if (e.uid === 'player' && e.n >= 12) quake();
     }
     else if (e.type === 'die') { dissolve(el); AUDIO.sfx('death'); continue; }
+    else if (e.type === 'dud') { text = 'Click. Dud.'; cls = 'blocked'; }
+    else if (e.type === 'pierce') { text = 'Cover burned away'; cls = 'buff'; }
     else if (e.type === 'burn') { text = `-${e.n} 🔥`; cls = 'dmg burn'; AUDIO.sfx('burn', delay / 1000); }
     else if (e.type === 'heal' && e.n) { text = `+${e.n}`; cls = 'heal'; }
     else if (e.type === 'cover') { text = `+${e.n} cover`; cls = 'cover'; }
@@ -738,7 +827,7 @@ async function playCard(i, uid) {
 
   flyCard(cardEl, dest, def.type === 'attack' ? 14 : 0);
   AUDIO.sfx('whoosh');
-  if (card.id === 'reload' || card.id === 'speed_loader' || card.id === 'quick_hands') AUDIO.sfx('reload', 0.2);
+  if (/reload|speed_loader|quick_hands|load_|hellfire_load|spin_cylinder/.test(card.id)) AUDIO.sfx('reload', 0.2);
   if (cardEl) cardEl.style.visibility = 'hidden';
   await sleep(260);
 
@@ -746,15 +835,19 @@ async function playCard(i, uid) {
     animate(heroEl, [{ transform: 'none' }, { transform: 'translateX(28px) rotate(2deg)', offset: 0.3 }, { transform: 'none' }], { duration: 380, easing: 'ease-out' });
     if (def.rounds) {
       const gun = gunPoint(heroEl);
-      const shots = def.rounds === 'all' ? c.p.rounds : card.id === 'ricochet' ? cardStats(card).v.n : Math.max(1, targets.length);
+      const shots = def.rounds === 'all' ? c.p.rounds : card.id === 'ricochet' ? cardStats(card).v.n : Math.max(1, targets.length, def.rounds);
+      const loaded = c.peekRounds(def.rounds === 'all' ? c.p.rounds : def.rounds);
       for (let k = 0; k < shots; k++) {
+        const rd = loaded[k] || null;
+        if (rd === 'dud') { AUDIO.sfx('click', k * 0.07); continue; }
         const t = targets[k % targets.length] || targets[0];
         if (!t) break;
         const p = centerOf(t);
         const hitP = { x: p.x + (Math.random() * 40 - 20), y: p.y + (Math.random() * 60 - 40) };
         burst(gun, 'muzzle', k * 70);
         AUDIO.sfx('shot', k * 0.07);
-        tracer(gun, hitP, card.id === 'hellfire_round' || c.p.pw.consecrated ? 'fire' : '', k * 70);
+        const tcls = rd === 'silver' ? 'silver' : rd === 'blessed' ? 'holy' : rd === 'hellfire' || card.id === 'hellfire_round' || c.p.pw.consecrated ? 'fire' : '';
+        tracer(gun, hitP, tcls, k * 70);
         burst(hitP, 'spark', k * 70 + 90);
       }
       quake();
@@ -769,7 +862,7 @@ async function playCard(i, uid) {
     AUDIO.sfx('hex');
   } else {
     burst(centerOf(heroEl), 'shield');
-    if (!/reload|speed_loader/.test(card.id)) AUDIO.sfx(card.id === 'whiskey' ? 'heal' : 'cover');
+    if (!/reload|speed_loader|load_|hellfire_load|spin_cylinder/.test(card.id)) AUDIO.sfx(card.id === 'whiskey' ? 'heal' : 'cover');
   }
   await sleep(170);
   c.play(i, uid);
@@ -916,9 +1009,10 @@ function howToPlay() {
     <h3>How to Play</h3>
     <div class="how">
       <p><b>The hunt.</b> Ride from town to town across three chapters. At the end of each one waits the demon who killed one of your family.</p>
-      <p><b>Towns.</b> Three strangers, one demon. Read their tells. Spend <b>Veil Sight</b> ${ART.eye(true)} to look through a stranger's skin and know for sure. Draw on the demon and you get the drop on it: it starts <b>Exposed</b>. Draw on an innocent and you carry that with you (a curse card), and the real demon strikes first.</p>
+      <p><b>Towns.</b> Somebody vanished last night, and one of the three strangers is a demon. You get a few questions: ask where they were, what they saw, or just watch them. Humans tell the truth. The demon lies, and it will try to frame someone. Or spend <b>Veil Sight</b> ${ART.eye(true)} to look through a stranger's skin and know for sure. Solve it without the Veil and the bounty is bigger. Draw on the demon and it starts <b>Exposed</b>. Draw on an innocent and you carry a curse card, and the real demon strikes first.</p>
+      <p><b>Your iron.</b> Each of the six chambers holds a round: Lead, Silver, Hellfire, Blessed or Buckshot. Shot cards fire the next loaded round, and its effect rides on that shot. Your <b>Gun Belt</b> is how the gun is loaded at the start of every fight and what Reload puts back. Buy special rounds at trading posts and arrange them in the order you want them.</p>
       <p><b>The Between.</b> Every fight happens in the Between: the same town, only wrong.</p>
-      <p><b>Grit</b> pays for cards and refills every turn. <b>Rounds</b> are bullets in your revolver: shot cards (the ones with bullet pips) spend them and they do <i>not</i> refill on their own. Play <b>Reload</b>.</p>
+      <p><b>Grit</b> pays for cards and refills every turn. Shot cards (the ones with bullet pips) spend rounds, and rounds do <i>not</i> refill on their own. Play <b>Reload</b>.</p>
       <p><b>Cover</b> absorbs damage and fades at the start of your turn. Watch the icons over each demon: they show what it will do next.</p>
       <p><b>Wrath</b> adds damage to every hit. <b>Exposed</b> takes 50% more damage. <b>Shaken</b> deals 25% less. <b>Hellfire</b> burns every turn.</p>
       <p class="sub">Keys: 1–9 play a card, E ends your turn, Esc cancels.</p>
@@ -972,11 +1066,21 @@ const ACTIONS = {
   'leave': leaveNode,
 
   // town
+  'ask': el => {
+    const t = S.town; const f = t.folk[+el.dataset.i]; const q = el.dataset.q;
+    if (t.questions <= 0 || f.asked[q] || f.gone) return;
+    f.asked[q] = true;
+    t.questions--;
+    AUDIO.sfx('deal');
+    S.flash = '';
+    render();
+  },
   'look': el => {
     const r = S.run; const f = S.town.folk[+el.dataset.i];
     if (r.sight <= 0 || f.seen) return;
     r.sight--;
     f.seen = true;
+    S.town.usedSight = true;
     AUDIO.sfx('sight');
     S.flash = f.demon ? 'The skin slides aside like a curtain. Something grins back at you.' : 'Just a person. Tired, scared, alive.';
     render();
@@ -986,9 +1090,11 @@ const ACTIONS = {
     if (f.demon) {
       S.flash = '';
       S.guilt = null;
+      S.cleanSolve = !t.usedSight;
       startFight(t.enc.foes, 'normal', { drop: true });
     } else {
       f.gone = true;
+      S.cleanSolve = false;
       r.innocents++;
       S.guilt = f.name;
       AUDIO.sfx('wrong');
@@ -999,7 +1105,7 @@ const ACTIONS = {
       render();
     }
   },
-  'leave-town': () => startFight(S.town.enc.foes, 'normal', { ambushed: true }),
+  'leave-town': () => { S.cleanSolve = false; startFight(S.town.enc.foes, 'normal', { ambushed: true }); },
   'fight-elite': () => startFight(ENCOUNTERS[S.run.chapter].elite.foes, 'elite'),
   'fight-boss': () => startFight(ENCOUNTERS[S.run.chapter].boss.foes, 'boss'),
 
@@ -1054,6 +1160,19 @@ const ACTIONS = {
     S.flash = `"${CARDS[item.id].name}. Good choice." She counts your coins twice.`;
     render();
   },
+  'buy-round': el => {
+    const r = S.run; const rd = S.shop.rounds[+el.dataset.i];
+    if (rd.sold || r.gold < rd.price) return;
+    showBelt(`Which chamber gets the ${ROUNDS[rd.id].name}?`, i => {
+      r.gold -= rd.price; rd.sold = true; r.belt[i] = rd.id;
+      AUDIO.sfx('reload');
+      S.flash = `You thumb the ${ROUNDS[rd.id].name} round into your belt.`;
+      closeModal(); render();
+    });
+  },
+  'belt-slot': el => beltClick(+el.dataset.i),
+  'belt': () => showBelt(),
+  'continue': continueRun,
   'buy-keepsake': () => {
     const r = S.run; const k = S.shop.keepsake;
     if (k.sold || r.gold < k.price) return;

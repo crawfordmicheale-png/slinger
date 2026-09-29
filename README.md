@@ -19,11 +19,11 @@ To serve it locally instead: `npm start`, or run any static file server in this 
 ## How it works
 
 - **Three chapters.** Each one ends with the demon who killed one of Jonah's family: the Hollow Steer (Amos), the Silk Widow (Ruth), and the Gentleman in Grey (Clara). Along the trail you choose between towns, wanted posters, campfires, trading posts, and trail events.
-- **Towns are a small whodunit.** Each town shows three strangers, and one of them is a demon. Every stranger has tells, and some innocent tells are red herrings. You can read the tells, or spend **Veil Sight** to look through someone's skin and know for sure.
-  - Draw on the demon and you get the drop on it: it starts **Exposed**.
-  - Draw on an innocent and you gain a *Blood on Your Hands* curse, and the real demon strikes first.
-  - Ride on without choosing and the demon follows you out and ambushes you.
 - **The Between.** Every fight takes place in the Between. It's the same town, but wrong: the buildings lean, the cross hangs upside down, and the sun is black.
+- **Your iron.** Each chamber of the revolver holds a round: Lead, Silver, Hellfire, Blessed or Buckshot, plus Duds that a certain card-sharp demon slips in. Shot cards fire the next loaded round, so the order matters. Your **gun belt** sets the starting load and what Reload puts back; buy rounds at trading posts and arrange them between fights.
+- **Two card styles.** *Gunslinger* cards play with the cylinder (Load Silver, Hammer Back, Spin the Cylinder, The Last Bullet, Six-Shooter). *Preacher* cards stack and cash in Hellfire (Sermon of Fire, Brimstone Verse, Baptism by Fire, Exorcism).
+- **Detective towns.** Each town lost someone last night. You get five questions: ask a stranger where they were, what they saw, or watch them. Humans tell the truth; the demon lies and tries to frame someone. Or spend **Veil Sight** to look through a stranger's skin and know for sure; solve it without the Veil for a bigger bounty. Draw on the demon and it starts **Exposed**; draw on an innocent and you gain a *Blood on Your Hands* curse and the real demon strikes first. The test suite checks that every generated town has exactly one consistent liar.
+- **Saves.** The run is saved in your browser at every stop on the trail. Continue from the title screen.
 - **Combat.** You get **Grit** (energy) every turn to spend on cards. **Rounds** are bullets in a six-shooter. Shot cards spend them, and they only come back when you play **Reload**. **Cover** blocks damage. The icons over each demon show what it will do next.
 - **Statuses.** Wrath adds damage to every hit, Exposed takes +50% damage, Shaken deals −25%, and Hellfire burns every turn.
 - **Keepsakes** (relics). You start with your old Tin Star and Clara's Locket. Beating a boss gives you a keepsake of the sibling you avenged.

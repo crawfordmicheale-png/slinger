@@ -584,3 +584,38 @@ body.between #vignette { background: radial-gradient(ellipse at center, rgba(0,0
   #hud .keepsake { width: 24px; height: 24px; font-size: 10px; }
 }
 .btn.replay { margin: 0 4px; padding: 2px 8px; font-size: 12px; vertical-align: middle; font-style: normal; }
+
+/* ---------------------------------------------------------------- detective towns */
+.casebar { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; align-items: center; margin: 10px auto; }
+.qleft { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #2a1a10d0; color: #f7e3b4; border-radius: 3px; font-family: var(--font-title); font-size: 14px; }
+.qdot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #f7e3b4; }
+.qdot.on { background: #f7e3b4; }
+.casebar .hint { padding: 5px 12px; background: #2a1a10b8; color: #f7e3b4; border-radius: 3px; font-style: italic; font-size: 15px; }
+.tells .clue { list-style: none; margin-left: -18px; padding: 4px 6px; background: #fff7e2; border-left: 3px solid var(--rust); border-radius: 2px; }
+.folk.seen-demon .tells .clue { background: #4a1c1c; }
+.tells .clue b { font-family: var(--font-title); font-weight: normal; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--rust); display: block; }
+.folk-questions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-bottom: 6px; }
+.folk-questions .btn { margin: 0; font-family: var(--font-body); font-size: 13px; }
+.folk { width: 280px; }
+.loot-note { font-style: italic; color: #2c6a3a; margin-top: 4px; }
+
+/* ---------------------------------------------------------------- rounds & belt */
+.round-chip { display: inline-block; width: 12px; height: 18px; border-radius: 5px 5px 2px 2px; border: 1px solid #0006; vertical-align: middle; box-shadow: inset -2px 0 0 #0003; }
+.round-chip.big { width: 18px; height: 30px; }
+.belt { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
+.belt-slot {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left;
+  padding: 10px; background: #fff6e2; border: 2px solid #d8b57c; border-radius: 4px; cursor: pointer; font-family: var(--font-body); color: var(--ink);
+}
+.belt-slot .belt-n { grid-row: 1 / 3; font-family: var(--font-title); font-size: 22px; color: var(--rust); }
+.belt-slot .round-chip { position: absolute; opacity: 0; }
+.belt-slot b { font-family: var(--font-title); font-weight: normal; display: flex; align-items: center; gap: 6px; }
+.belt-slot small { grid-column: 2; font-size: 13px; opacity: .8; }
+.belt-slot:hover { border-color: var(--rust); }
+.belt-slot.sel { border-color: var(--blood); background: #ffe6cf; box-shadow: 0 0 0 3px #b0231b44; }
+.belt-slot b::before { content: ""; width: 12px; height: 20px; border-radius: 5px 5px 2px 2px; background: var(--chip, #d7a340); border: 1px solid #0006; }
+.center { text-align: center; }
+.cylinder .chamber.next { stroke: #fff; stroke-width: 3; }
+.cylinder .chamber.r-dud { fill: #555 !important; }
+.tracer.silver { background: linear-gradient(90deg, #fff0, #e8eef2 30%, #fff); box-shadow: 0 0 12px #cfe0ff; }
+.tracer.holy { height: 4px; background: linear-gradient(90deg, #9fe3ff00, #9fe3ff 30%, #fff); box-shadow: 0 0 14px #9fe3ff; }

@@ -100,6 +100,30 @@ function playRun(seed) {
   return { win: true, chapter: 4 };
 }
 
+// Every town must be solvable from the clues alone: assuming humans tell the
+// truth and exactly one stranger lies, only the demon can be that liar.
+function suspects(town) {
+  return town.folk.filter(liar => {
+    const where = {};
+    const fact = (name, place) => {
+      if (where[name] && where[name] !== place) return false;
+      where[name] = place; return true;
+    };
+    return town.folk.filter(f => f !== liar).every(f => fact(f.name, f.claim.at) && fact(f.claim.saw[0], f.claim.saw[1]));
+  });
+}
+{
+  const r = new Run(99);
+  for (let i = 0; i < 500; i++) {
+    const t = r.makeTown();
+    const s = suspects(t);
+    assert.strictEqual(s.length, 1, 'town should have exactly one consistent liar');
+    assert(s[0].demon, 'the only consistent liar should be the demon');
+    assert.strictEqual(new Set(t.folk.map(f => f.name.split(' ')[0])).size, 3, 'first names must be unique');
+  }
+  console.log('detective: 500 towns, every one solvable, the demon always the only consistent liar');
+}
+
 const N = +process.argv[2] || 300;
 const results = [];
 for (let i = 0; i < N; i++) results.push(playRun(i + 1));

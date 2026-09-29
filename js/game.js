@@ -68,14 +68,21 @@ class Combat {
     this.over = null;   // null | 'win' | 'lose'
     this.lockedOnce = false;
 
-    const maxRounds = run.has('gun_oil') ? 8 : HERO.maxRounds;
+    const maxRounds = run.belt.length;
     this.p = {
       uid: 'player', isPlayer: true, name: HERO.name,
       hp: run.hp, maxHp: run.maxHp, block: 0,
       grit: 0, maxGrit: HERO.maxGrit + (run.has('ruths_rosary') ? 1 : 0),
-      rounds: maxRounds, maxRounds,
+      maxRounds,
+      // The cylinder: chambers[i] is a round id or null; `pos` is the next chamber to fire.
+      chambers: run.belt.slice(), pos: 0,
+      get rounds() { return this.chambers.filter(Boolean).length; },
       st: {}, pw: {},
     };
+    this.nextShotBonus = 0;   // Hammer Back
+    this.shotsThisTurn = 0;   // Steady Aim
+    this.fired = [];          // rounds fired by the card being played, consumed hit by hit
+    this.firedThisCard = [];
     this.enemies = [];
     foeIds.forEach(id => this.spawn(id));
 
@@ -187,13 +194,80 @@ class Combat {
     else if (this.alive().length === 0) this.over = 'win';
   }
 
+  // ---- the cylinder -------------------------------------------------------------
+  /** Index of the next loaded chamber at or after `pos`, or -1 if the gun is empty. */
+  nextLoaded() {
+    const ch = this.p.chambers, n = ch.length;
+    for (let k = 0; k < n; k++) { const i = (this.p.pos + k) % n; if (ch[i]) return i; }
+    return -1;
+  }
+  /** The next `n` rounds that would fire, in order (for previews and the UI). */
+  peekRounds(n) {
+    const ch = this.p.chambers, len = ch.length, out = [];
+    for (let k = 0; k < len && out.length < n; k++) { const r = ch[(this.p.pos + k) % len]; if (r) out.push(r); }
+    return out;
+  }
+  fireOne() {
+    const i = this.nextLoaded();
+    if (i < 0) return null;
+    const r = this.p.chambers[i];
+    this.p.chambers[i] = null;
+    this.p.pos = (i + 1) % this.p.chambers.length;
+    return r;
+  }
+  /** Skip the next loaded round without firing it. */
+  spin() {
+    const i = this.nextLoaded();
+    if (i >= 0) this.p.pos = (i + 1) % this.p.chambers.length;
+    this.emit({ type: 'reload' });
+  }
+  /** Refill up to `n` empty chambers, in firing order, with the rounds from your gun belt. */
+  reload(n) {
+    const ch = this.p.chambers, len = ch.length;
+    for (let k = 0; k < len && n > 0; k++) {
+      const i = (this.p.pos + k) % len;
+      if (!ch[i]) { ch[i] = this.run.belt[i] || 'lead'; n--; }
+    }
+    this.emit({ type: 'reload' });
+  }
+  /** Put `type` into the next `n` chambers in firing order, replacing whatever was there. */
+  loadRound(type, n) {
+    const ch = this.p.chambers, len = ch.length;
+    for (let k = 0; k < Math.min(n, len); k++) ch[(this.p.pos + k) % len] = type;
+    this.emit({ type: 'reload' });
+  }
+
+  /** One hit from the player. If the card fired rounds, the next one rides on this hit. */
+  shoot(t, dmg) {
+    if (!t || t.hp <= 0) return;
+    const r = this.fired.length ? this.fired.shift() : null;
+    const R = r ? ROUNDS[r] : null;
+    if (R && R.dud) { this.emit({ type: 'dud', uid: t.uid }); this.say('Click. A dud.'); return; }
+    if (r) {
+      if (this.shotsThisTurn === 0 && this.p.pw.steady_aim) dmg += this.p.pw.steady_aim;
+      this.shotsThisTurn++;
+      dmg += this.nextShotBonus; this.nextShotBonus = 0;
+      dmg += R.bonus || 0;
+      if (R.pierce && t.block) { this.emit({ type: 'pierce', uid: t.uid, n: t.block }); t.block = 0; }
+    }
+    this.damage(this.p, t, dmg);
+    if (R && t.hp > 0 && R.onHit) R.onHit(this, t);
+    if (R && R.splash) this.alive().filter(e => e !== t).forEach(e => this.damage(this.p, e, R.splash));
+  }
+
   // ---- API used by card play() callbacks --------------------------------------
-  hit(t, dmg, times = 1) { for (let i = 0; i < times; i++) this.damage(this.p, t, dmg); }
-  hitAll(dmg, times = 1) { for (let i = 0; i < times; i++) this.alive().forEach(e => this.damage(this.p, e, dmg)); }
+  hit(t, dmg, times = 1) { for (let i = 0; i < times; i++) this.shoot(t, dmg); }
+  hitAll(dmg, times = 1) {
+    for (let i = 0; i < times; i++) {
+      // One round per volley: its effects land on every foe.
+      const r = this.fired.length ? this.fired.shift() : null;
+      this.alive().forEach(e => { if (r) this.fired.unshift(r); this.shoot(e, dmg); });
+    }
+  }
   hitRandom(dmg, times = 1) {
     for (let i = 0; i < times; i++) {
       const a = this.alive(); if (!a.length) return;
-      this.damage(this.p, pick(this.rng, a), dmg);
+      this.shoot(pick(this.rng, a), dmg);
     }
   }
   cover(n) { this.p.block += n; this.emit({ type: 'cover', uid: 'player', n }); }
@@ -202,7 +276,6 @@ class Combat {
   applySelf(key, n) { this.apply(this.p, key, n); }
   heal(n) { const before = this.p.hp; this.p.hp = Math.min(this.p.maxHp, this.p.hp + n); this.emit({ type: 'heal', uid: 'player', n: this.p.hp - before }); }
   gainGrit(n) { this.p.grit += n; }
-  reload(n) { this.p.rounds = Math.min(this.p.maxRounds, this.p.rounds + n); this.emit({ type: 'reload' }); }
   power(key, n) { this.p.pw[key] = (this.p.pw[key] || 0) + n; }
 
   draw(n) {
@@ -245,13 +318,23 @@ class Combat {
     }
     this.p.grit -= s.cost;
     this.spent = s.rounds === 'all' ? this.p.rounds : s.rounds;
-    this.p.rounds -= this.spent;
-    if (this.spent) this.emit({ type: 'shot', n: this.spent });
+    this.fired = [];
+    for (let i = 0; i < this.spent; i++) this.fired.push(this.fireOne());
+    this.firedThisCard = this.fired.slice();
+    if (this.spent) this.emit({ type: 'shot', n: this.spent, rounds: this.firedThisCard });
     this.hand.splice(handIdx, 1);
     this.say(`You play ${s.name}.`);
 
     s.def.play(this, s.v, target);
 
+    // Rounds a card fired but never "rode" a hit (e.g. two rounds behind one big shot)
+    // still deliver their effects to the target.
+    for (const r of this.fired) {
+      const R = ROUNDS[r];
+      const tgts = target ? [target] : s.def.target === 'all' ? this.alive() : [];
+      if (R && R.onHit) tgts.forEach(t => t.hp > 0 && R.onHit(this, t));
+    }
+    this.fired = [];
     if (this.spent && this.p.pw.consecrated) {
       if (target) this.apply(target, 'burn', this.p.pw.consecrated);
       else if (s.def.target === 'all') this.applyAll('burn', this.p.pw.consecrated);
@@ -272,7 +355,10 @@ class Combat {
     this.tickBurn(p);
     if (this.over) return;
     p.grit = p.maxGrit;
+    this.nextShotBonus = 0;
+    this.shotsThisTurn = 0;
     if (p.pw.quick_hands) this.reload(p.pw.quick_hands);
+    if (p.pw.consecrate_ground) this.applyAll('burn', p.pw.consecrate_ground);
     if (p.pw.lawmans_instinct) p.block += p.pw.lawmans_instinct;
     let n = HERO.handSize;
     if (this.turn === 1 && this.run.has('snake_oil')) n += 2;
@@ -339,6 +425,7 @@ class Combat {
     if (m.exposed) this.applySelf('exposed', m.exposed);
     if (m.burn) this.applySelf('burn', m.burn);
     if (m.curse) for (let i = 0; i < m.curse.n; i++) this.discard.push(newCard(m.curse.id));
+    if (m.tamper) { this.loadRound('dud', m.tamper); this.say(`${e.name} slips ${m.tamper} duds into your iron.`); }
     if (m.summon) for (let i = 0; i < m.summon.n; i++) if (this.alive().length < 5) this.spawn(m.summon.id);
   }
 
@@ -352,7 +439,7 @@ class Combat {
     }
     if (m.block) out.push({ kind: 'def', label: `${m.block}` });
     if (m.wrath || m.heal) out.push({ kind: 'buff', label: m.heal ? `+${m.heal}` : '' });
-    if (m.shaken || m.exposed || m.burn || m.curse) out.push({ kind: 'debuff', label: '' });
+    if (m.shaken || m.exposed || m.burn || m.curse || m.tamper) out.push({ kind: 'debuff', label: '' });
     if (m.summon) out.push({ kind: 'summon', label: '' });
     return out;
   }
@@ -368,6 +455,7 @@ class Combat {
     if (m.exposed) bits.push(`Exposed ${m.exposed}`);
     if (m.burn) bits.push(`Hellfire ${m.burn}`);
     if (m.curse) bits.push(`shuffle ${m.curse.n} ${CARDS[m.curse.id].name} into your discard`);
+    if (m.tamper) bits.push(`slip ${m.tamper} duds into your next chambers`);
     if (m.summon) bits.push(`summon ${m.summon.n} ${ENEMIES[m.summon.id].name}${m.summon.n > 1 ? 's' : ''}`);
     return `${m.n}: ${bits.join(', ')}.`;
   }
@@ -376,7 +464,16 @@ class Combat {
   previewValues(card, target) {
     const s = cardStats(card);
     const v = Object.assign({}, s.v);
-    if (v.dmg !== undefined) v.dmg = this.calcDamage(this.p, target || null, v.dmg);
+    if (v.dmg !== undefined) {
+      let base = v.dmg;
+      if (s.rounds) {
+        const r = ROUNDS[this.peekRounds(1)[0]];
+        base += this.nextShotBonus + ((r && r.bonus) || 0);
+        if (this.shotsThisTurn === 0 && this.p.pw.steady_aim) base += this.p.pw.steady_aim;
+        if (r && r.dud) base = 0;
+      }
+      v.dmg = this.calcDamage(this.p, target || null, base);
+    }
     return CARDS[card.id].text(v);
   }
 
@@ -409,7 +506,28 @@ class Run {
     this.innocents = 0;
     this.flags = {};    // story choices: remembered, confessed, forgiven, vow
     this.journal = [];  // { chapter, title, text }
+    this.belt = STARTING_BELT.slice(); // the load you start every fight with, chamber by chamber
+    this.removals = 0;
     this.choices = this.genChoices();
+  }
+
+  // ---- saving ---------------------------------------------------------------------
+  static SAVE_FIELDS = ['hp', 'maxHp', 'gold', 'sight', 'maxSight', 'deck', 'keepsakes', 'chapter', 'step',
+    'usedTowns', 'usedEvents', 'kills', 'innocents', 'flags', 'journal', 'belt', 'removals', 'choices'];
+
+  toJSON() {
+    const o = { v: 1 };
+    for (const k of Run.SAVE_FIELDS) o[k] = this[k];
+    return o;
+  }
+
+  static fromJSON(o) {
+    if (!o || o.v !== 1) return null;
+    const r = new Run();
+    for (const k of Run.SAVE_FIELDS) if (o[k] !== undefined) r[k] = o[k];
+    // Card uids must stay unique after loading.
+    _uid = Math.max(_uid, ...r.deck.map(c => c.uid + 1));
+    return r;
   }
 
   has(k) { return this.keepsakes.includes(k); }
@@ -423,6 +541,7 @@ class Run {
     this.keepsakes.push(k);
     if (k === 'bible') { this.maxHp += 12; this.hp += 12; }
     if (k === 'silver_spurs') { this.maxSight += 1; this.sight += 1; }
+    if (k === 'gun_oil') this.belt.push('lead', 'lead');
   }
 
   randomKeepsake() {
@@ -473,12 +592,18 @@ class Run {
   }
 
   // ---- towns ------------------------------------------------------------------
-  /** Build a town with three folk, exactly one of whom is a demon. */
+  /**
+   * Build a town with three strangers, exactly one of whom is a demon, and a
+   * small case to crack. Last night someone vanished near a scene. Humans tell
+   * the truth; the demon lies. The clues are laid out so that, with every
+   * question asked, only one stranger can be the liar:
+   *   A (human): alibi = placeA, saw the demon at the scene.
+   *   B (human): alibi = placeB, saw A at placeA (backs up A).
+   *   D (demon): alibi = a lie,  saw B at the scene (a frame job).
+   */
   makeTown() {
     const enc = pick(this.rng, ENCOUNTERS[this.chapter].normal);
     const names = new Set();
-    const folk = [];
-    const demonIdx = Math.floor(this.rng() * 3);
     const usedTells = new Set();
     const tell = pool => {
       const opts = pool.filter(t => !usedTells.has(t));
@@ -488,25 +613,48 @@ class Run {
     };
     // Each stranger gets a portrait; the demon's disguise matches its guise.
     const pics = shuffle(this.rng, FOLK.portraits.slice());
-    const demonG = enc.g || 'm';
-    const dpi = pics.findIndex(pt => pt.g === demonG);
+    const dpi = pics.findIndex(pt => pt.g === (enc.g || 'm'));
     const demonPic = pics.splice(dpi, 1)[0];
-    for (let i = 0; i < 3; i++) {
-      const demon = i === demonIdx;
-      const pic = demon ? demonPic : pics.pop();
+    // Innocent folk can hold the same jobs demons like to hide in, so a job alone proves nothing.
+    const guiseRoles = g => Object.values(ENCOUNTERS).flatMap(ch => ch.normal)
+      .filter(e => (e.g || 'm') === g && !e.plural && e.role !== enc.role).map(e => e.role);
+    const humanRoles = pic => pic.roles.concat(guiseRoles(pic.g));
+    const person = (pic, demon) => {
       let name;
-      do { name = `${pick(this.rng, FOLK.first[pic.g])} ${pick(this.rng, FOLK.last)}`; } while (names.has(name));
-      names.add(name);
+      // First names must differ: witnesses refer to each other by first name.
+      do { name = `${pick(this.rng, FOLK.first[pic.g])} ${pick(this.rng, FOLK.last)}`; } while (names.has(name.split(' ')[0]));
+      names.add(name.split(' ')[0]);
       const tells = demon
-        ? [this.rng() < 0.5 ? tell(enc.tells) : tell(FOLK.demonic), tell(FOLK.mundane)]
+        ? [tell(FOLK.mundane), this.rng() < 0.5 ? tell(enc.tells) : tell(FOLK.demonic)]
         : [tell(FOLK.mundane), this.rng() < 0.55 ? tell(FOLK.ambiguous) : tell(FOLK.mundane)];
-      folk.push({
-        name, role: demon ? enc.role : pick(this.rng, pic.roles), img: pic.img,
-        tells: shuffle(this.rng, tells),
-        demon, seen: false, gone: false,
-      });
-    }
-    return { name: this.townName(), folk, enc };
+      return {
+        name, role: demon ? enc.role : pick(this.rng, humanRoles(pic)), img: pic.img,
+        tells, demon, seen: false, gone: false,
+        asked: { alibi: false, saw: false, watch: false },
+      };
+    };
+    const A = person(pics.pop(), false), B = person(pics.pop(), false), D = person(demonPic, true);
+    const places = shuffle(this.rng, CASE.places.slice());
+    const scene = pick(this.rng, CASE.scenes);
+    const first = f => f.name.split(' ')[0];
+    const say = (arr, ...a) => pick(this.rng, arr)(...a);
+    // Structured facts behind the dialogue (used by the fairness test).
+    A.claim = { at: places[0], saw: [D.name, scene] };
+    B.claim = { at: places[1], saw: [A.name, places[0]] };
+    D.claim = { at: places[2], saw: [B.name, scene] };
+    A.alibi = say(CASE.alibi, places[0]);
+    B.alibi = say(CASE.alibi, places[1]);
+    D.alibi = say(CASE.alibi, places[2]);
+    A.saw = say(CASE.saw, first(D), scene);
+    B.saw = say(CASE.saw, first(A), places[0]);
+    D.saw = say(CASE.saw, first(B), scene);
+    const folk = shuffle(this.rng, [A, B, D]);
+    return {
+      name: this.townName(), folk, enc, scene,
+      victim: pick(this.rng, CASE.victims),
+      questions: 5 + (this.has('lawmans_notebook') ? 2 : 0),
+      usedSight: false,
+    };
   }
 
   // ---- rewards ----------------------------------------------------------------
@@ -540,8 +688,10 @@ class Run {
   makeShop() {
     const cards = this.cardChoices(5, 0.06).map(id => ({ id, price: priceFor(CARDS[id].rarity, this.rng), sold: false }));
     const k = this.randomKeepsake();
+    const rounds = shuffle(this.rng, SPECIAL_ROUNDS.slice()).slice(0, 2)
+      .map(id => ({ id, price: ROUNDS[id].price + randInt(this.rng, -3, 5), sold: false }));
     return {
-      cards,
+      cards, rounds,
       keepsake: k ? { id: k, price: randInt(this.rng, 130, 160), sold: false } : null,
       removePrice: 60 + (this.removals || 0) * 20,
       healPrice: 30,

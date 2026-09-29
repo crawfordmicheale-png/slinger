@@ -236,6 +236,112 @@ const CARDS = {
     play: (c, v, t) => c.hit(t, t && t.hp * 2 < t.maxHp ? v.dmg * 2 : v.dmg),
   },
 
+  // ---- Gunslinger: the order of the rounds in your iron matters ------------
+  hammer_back: {
+    name: 'Hammer Back', type: 'skill', rarity: 'common', cost: 0, style: 'gun',
+    v: { dmg: 5 }, up: { dmg: 8 },
+    text: v => `Your next shot this turn deals ${v.dmg} extra damage.`,
+    play: (c, v) => { c.nextShotBonus += v.dmg; },
+  },
+  double_tap: {
+    name: 'Double Tap', type: 'attack', rarity: 'common', cost: 1, rounds: 2, target: 'enemy', style: 'gun',
+    v: { dmg: 5 }, up: { dmg: 7 },
+    text: v => `Fire 2 rounds. Each deals ${v.dmg} damage.`,
+    play: (c, v, t) => c.hit(t, v.dmg, 2),
+  },
+  spin_cylinder: {
+    name: 'Spin the Cylinder', type: 'skill', rarity: 'common', cost: 0, style: 'gun',
+    v: { draw: 1 }, up: { draw: 2 },
+    text: v => `Skip the next loaded round without firing it. Draw ${v.draw}.`,
+    play: (c, v) => { c.spin(); c.draw(v.draw); },
+  },
+  load_silver: {
+    name: 'Load Silver', type: 'skill', rarity: 'uncommon', cost: 0, style: 'gun',
+    v: { n: 2 }, up: { n: 3 },
+    text: v => `Load Silver into your next ${v.n} chambers.`,
+    play: (c, v) => c.loadRound('silver', v.n),
+  },
+  trick_shot: {
+    name: 'Trick Shot', type: 'attack', rarity: 'uncommon', cost: 1, rounds: 1, target: 'enemy', style: 'gun',
+    v: { dmg: 7, draw: 2 }, up: { dmg: 10, draw: 2 },
+    text: v => `Deal ${v.dmg} damage. If the round wasn't Lead, draw ${v.draw}.`,
+    play: (c, v, t) => { const special = c.firedThisCard.some(r => r && r !== 'lead'); c.hit(t, v.dmg); if (special) c.draw(v.draw); },
+  },
+  gunsmoke: {
+    name: 'Gunsmoke', type: 'skill', rarity: 'uncommon', cost: 1, style: 'gun',
+    v: { per: 2 }, up: { per: 3 },
+    text: v => `Gain ${v.per} Cover for every loaded round.`,
+    play: (c, v) => c.cover(v.per * c.p.rounds),
+  },
+  last_bullet: {
+    name: 'The Last Bullet', type: 'attack', rarity: 'uncommon', cost: 1, rounds: 1, target: 'enemy', style: 'gun',
+    v: { dmg: 8, big: 24 }, up: { dmg: 10, big: 30 },
+    text: v => `Deal ${v.dmg} damage. If this empties your iron, deal ${v.big} instead.`,
+    play: (c, v, t) => c.hit(t, c.p.rounds === 0 ? v.big : v.dmg),
+  },
+  steady_aim: {
+    name: 'Steady Aim', type: 'power', rarity: 'rare', cost: 1, style: 'gun',
+    v: { dmg: 4 }, up: { dmg: 6 },
+    text: v => `Your first shot each turn deals ${v.dmg} extra damage.`,
+    play: (c, v) => c.power('steady_aim', v.dmg),
+  },
+  six_shooter: {
+    name: 'Six-Shooter', type: 'attack', rarity: 'rare', cost: 2, rounds: 'all', target: 'all', style: 'gun',
+    v: { dmg: 7 }, up: { dmg: 9 },
+    text: v => `Fire every loaded round. Each hits the weakest foe for ${v.dmg}.`,
+    play: (c, v) => { for (let i = 0; i < c.spent; i++) { const t = c.alive().sort((a, b) => a.hp - b.hp)[0]; if (t) c.hit(t, v.dmg); } },
+  },
+
+  // ---- Preacher: Hellfire and Blessed rounds ---------------------------------
+  load_blessed: {
+    name: 'Load Blessed', type: 'skill', rarity: 'common', cost: 0, style: 'holy',
+    v: { n: 2 }, up: { n: 3 },
+    text: v => `Load Blessed rounds into your next ${v.n} chambers.`,
+    play: (c, v) => c.loadRound('blessed', v.n),
+  },
+  sermon_fire: {
+    name: 'Sermon of Fire', type: 'skill', rarity: 'common', cost: 1, target: 'all', style: 'holy',
+    v: { burn: 3 }, up: { burn: 5 },
+    text: v => `Apply ${v.burn} Hellfire to ALL foes.`,
+    play: (c, v) => c.applyAll('burn', v.burn),
+  },
+  rosary_prayer: {
+    name: 'A Prayer for Ruth', type: 'skill', rarity: 'common', cost: 1, style: 'holy',
+    v: { cov: 7, heal: 3 }, up: { cov: 10, heal: 4 },
+    text: v => `Gain ${v.cov} Cover. Heal ${v.heal} HP.`,
+    play: (c, v) => { c.cover(v.cov); c.heal(v.heal); },
+  },
+  hellfire_load: {
+    name: 'Hellfire Load', type: 'skill', rarity: 'uncommon', cost: 1, style: 'holy',
+    v: { n: 3 }, up: { n: 4 },
+    text: v => `Load Hellfire rounds into your next ${v.n} chambers.`,
+    play: (c, v) => c.loadRound('hellfire', v.n),
+  },
+  brimstone_verse: {
+    name: 'Brimstone Verse', type: 'attack', rarity: 'uncommon', cost: 1, target: 'enemy', style: 'holy',
+    v: { dmg: 6 }, up: { dmg: 9 },
+    text: v => `Deal ${v.dmg} damage. Double the foe's Hellfire.`,
+    play: (c, v, t) => { c.hit(t, v.dmg); if (t && t.st.burn) c.apply(t, 'burn', t.st.burn); },
+  },
+  baptism: {
+    name: 'Baptism by Fire', type: 'attack', rarity: 'uncommon', cost: 2, target: 'enemy', style: 'holy', exhaust: true,
+    v: { per: 3 }, up: { per: 4 },
+    text: v => `Deal ${v.per} damage for each Hellfire on the foe, then put it out. Exhaust.`,
+    play: (c, v, t) => { const b = (t && t.st.burn) || 0; c.hit(t, v.per * b); if (t) delete t.st.burn; },
+  },
+  consecrate_ground: {
+    name: 'Consecrate the Ground', type: 'power', rarity: 'rare', cost: 2, style: 'holy',
+    v: { burn: 2 }, up: { burn: 3 },
+    text: v => `At the start of each turn, apply ${v.burn} Hellfire to ALL foes.`,
+    play: (c, v) => c.power('consecrate_ground', v.burn),
+  },
+  exorcism: {
+    name: 'Exorcism', type: 'attack', rarity: 'rare', cost: 3, target: 'enemy', style: 'holy',
+    v: { dmg: 18, per: 3 }, up: { dmg: 24, per: 4 },
+    text: v => `Deal ${v.dmg} damage, plus ${v.per} for each Hellfire on the foe.`,
+    play: (c, v, t) => c.hit(t, v.dmg + v.per * ((t && t.st.burn) || 0)),
+  },
+
   // ---- Curses ------------------------------------------------------------
   blood_on_hands: {
     name: 'Blood on Your Hands', type: 'curse', rarity: 'curse', cost: null, unplayable: true,
@@ -250,6 +356,44 @@ const CARDS = {
     v: {}, text: () => 'Unplayable. Fades at end of turn. You remember the funeral.',
   },
 };
+
+// ---------------------------------------------------------------------------
+// ROUNDS — what sits in each chamber of the revolver.
+// Your gun belt (run.belt) is the load you start every fight with; Reload
+// restores it. bonus = extra damage; pierce = breaks the target's Cover first;
+// splash = damage to every other foe; dud = does nothing.
+// ---------------------------------------------------------------------------
+const ROUNDS = {
+  lead:     { name: 'Lead', desc: 'A plain lead round.', color: '#d7a340' },
+  silver:   { name: 'Silver', desc: '+4 damage. Demons hate it.', bonus: 4, color: '#e8eef2', price: 30 },
+  hellfire: { name: 'Hellfire', desc: 'Sets the target alight: 3 Hellfire.', color: '#ff6a2b', price: 30,
+              onHit: (c, t) => c.apply(t, 'burn', 3) },
+  blessed:  { name: 'Blessed', desc: '+2 damage, and burns straight through Cover.', bonus: 2, pierce: true, color: '#9fe3ff', price: 35 },
+  buckshot: { name: 'Buckshot', desc: 'Also deals 3 damage to every other foe.', splash: 3, color: '#b98a5a', price: 25 },
+  dud:      { name: 'Dud', desc: 'Does nothing. Somebody tampered with your iron.', dud: true, color: '#555' },
+};
+const SPECIAL_ROUNDS = ['silver', 'hellfire', 'blessed', 'buckshot'];
+const STARTING_BELT = ['lead', 'lead', 'silver', 'lead', 'lead', 'lead'];
+
+// ---------------------------------------------------------------------------
+// DETECTIVE WORK — every town lost someone last night.
+// ---------------------------------------------------------------------------
+const CASE = {
+  places: ['the saloon', 'the church', 'the livery stable', 'the general store', 'the telegraph office', 'the barbershop', 'the boarding house', 'the assay office'],
+  scenes: ['the dry wash', 'the old well', 'the graveyard', 'the stockyards', 'the rail yard', 'the cottonwood grove'],
+  victims: ['the Pruitt boy', 'old Mrs. Hatch', 'the new schoolteacher', 'a cattle buyer from Abilene', 'the Doyle twins', 'the night watchman', 'a Mormon peddler', 'the blacksmith\'s daughter'],
+  alibi: [
+    p => `"I was at ${p} all night. Ask anybody."`,
+    p => `"Where was I? ${cap(p)}, till past midnight."`,
+    p => `"${cap(p)}. Same as every night, Marshal."`,
+  ],
+  saw: [
+    (who, p) => `"I saw ${who} at ${p}, late. Real late."`,
+    (who, p) => `"${who}? At ${p}, around midnight. I'd swear to it."`,
+    (who, p) => `"Only one I saw was ${who}, over by ${p}."`,
+  ],
+};
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 const STARTER_DECK = [
   'quick_draw', 'quick_draw', 'quick_draw', 'quick_draw', 'quick_draw',
@@ -281,8 +425,9 @@ const KEEPSAKES = {
   bible: { name: "Grandpa's Bible", desc: 'Raise max HP by 12 when found. A bullet hole through Revelation.' },
   horseshoe: { name: 'Lucky Horseshoe', desc: 'Collect 15 extra gold after every fight.' },
   war_paint: { name: 'Cinder War Paint', desc: 'Start each fight with 1 Wrath.' },
+  lawmans_notebook: { name: "Lawman's Notebook", desc: 'Ask 2 extra questions in every town. Your old handwriting, from when you still did things by the book.' },
 };
-const KEEPSAKE_POOL = ['snake_oil', 'silver_spurs', 'gun_oil', 'rattle', 'bible', 'horseshoe', 'war_paint'];
+const KEEPSAKE_POOL = ['snake_oil', 'silver_spurs', 'gun_oil', 'rattle', 'bible', 'horseshoe', 'war_paint', 'lawmans_notebook'];
 
 // ---------------------------------------------------------------------------
 // DEMONS
@@ -364,7 +509,7 @@ const ENEMIES = {
   card_devil: {
     name: 'Jack of Pyres', hp: [52, 56], art: 'card',
     moves: {
-      deal:  { n: 'Deal You In', atk: 7, curse: { id: 'bad_hand', n: 2 } },
+      deal:  { n: 'Deal You In', atk: 7, tamper: 2 },
       flush: { n: 'Royal Flush', atk: 4, hits: 3 },
       ante:  { n: 'Raise the Ante', block: 10, wrath: 2 },
     },
@@ -512,7 +657,7 @@ const ENCOUNTERS = {
       { foes: ['measurer'], role: 'undertaker', tells: ['Had a coffin built for you before you rode in.', 'His measuring tape is made of hair.'] },
       { foes: ['card_devil'], role: 'faro dealer', tells: ['Has never lost a hand. Not once.', 'The cards in his deck are all the same card.'] },
       { foes: ['chalk_wraith'], role: 'schoolmarm', g: 'f', tells: ['The children recite lessons in a language that makes your teeth hurt.', 'Her chalk writes by itself.'] },
-      { foes: ['jackal', 'jackal'], role: 'pair of drifters', tells: ['Two brothers who laugh at the same moment, every time.', 'They have been "just passing through" for six years.'] },
+      { foes: ['jackal', 'jackal'], role: 'pair of drifters', plural: true, tells: ['Two brothers who laugh at the same moment, every time.', 'They have been "just passing through" for six years.'] },
     ],
     elite: { foes: ['mother_tallow'], name: 'Mother Tallow', bounty: 'Candle-maker. Sells tapers that burn with no smoke and no light. Folks who buy them stop waking up.' },
     boss: {
@@ -528,7 +673,7 @@ const ENCOUNTERS = {
       { foes: ['hanging_judge'], role: 'circuit judge', tells: ['Has hanged thirty men this year. Never held a trial.', 'His gavel is wet.'] },
       { foes: ['false_shepherd'], role: 'traveling missionary', tells: ['His congregation never blinks during the sermon.', 'The cross on his chapel hangs upside down when nobody looks.'] },
       { foes: ['iron_horror'], role: 'railroad surveyor', tells: ['Lays track that leads nowhere.', 'Smells of coal smoke and cooked meat.'] },
-      { foes: ['crow', 'crow', 'crow'], role: 'three sisters', g: 'f', tells: ['Three old women who finish each other\'s sentences.', 'Birds fall silent when they pass.'] },
+      { foes: ['crow', 'crow', 'crow'], role: 'three sisters', plural: true, g: 'f', tells: ['Three old women who finish each other\'s sentences.', 'Birds fall silent when they pass.'] },
     ],
     elite: { foes: ['brimstone_marshal'], name: 'The Brimstone Marshal', bounty: 'Wears a star just like the one you used to. Serves warrants for the other side.' },
     boss: {
@@ -919,5 +1064,5 @@ const THANKS = [
 
 // Make available to Node (tests) as well as the browser.
 if (typeof module !== 'undefined') {
-  module.exports = { HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
+  module.exports = { ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
 }
