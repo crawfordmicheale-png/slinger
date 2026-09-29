@@ -31,8 +31,8 @@ Keys in combat: `1`–`9` play a card, `E` ends your turn, `Esc` cancels targeti
 | `js/data.js` | All content: cards, keepsakes, demons, encounters, townsfolk tells, trail events, story text |
 | `js/game.js` | Rules engine (`Combat`, `Run`). No DOM, so it runs in Node |
 | `js/art.js` | Painted character art (`art/*.webp`), with inline SVG silhouettes as a fallback |
-| `art/` | Painted art generated with Higgsfield (GPT Image 2.5): Jonah, 20 demons, 6 townsfolk portraits, and the town by day and in the Between |
-| `js/ui.js` | Screens, input handling, effects |
+| `art/` | Painted art generated with Higgsfield (GPT Image 2.5): Jonah, 20 demons, 6 townsfolk portraits, the town by day and in the Between, and an illustration for every card (`art/cards/`) |
+| `js/ui.js` | Screens, input handling, and combat animation (card flights, gunfire tracers, slashes, demon lunges, death burns) |
 | `css/style.css` | Styling for daylight and for the Between |
 | `tests/sim.js` | Headless simulation. A greedy bot plays hundreds of full runs, checking invariants and reporting win rate |
 

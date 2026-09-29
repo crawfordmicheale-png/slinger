@@ -43,6 +43,7 @@ function cardHTML(card, o = {}) {
     ${s.cost === null || s.cost === undefined ? '' : `<div class="cost">${s.cost}</div>`}
     ${s.rounds ? `<div class="rounds">${pips}</div>` : ''}
     <div class="c-name">${esc(s.name)}</div>
+    <div class="c-art" style="background-image:url('art/cards/${card.id}.webp')"></div>
     <div class="c-type">${def.type}${def.rarity !== 'starter' && def.rarity !== 'curse' ? ' · ' + def.rarity : ''}</div>
     <div class="c-text">${esc(text)}</div>
     ${o.price !== undefined ? `<div class="price">${o.price} gold</div>` : ''}
@@ -421,6 +422,9 @@ function leaveNode() {
 function startFight(foes, kind, opts = {}) {
   S.fightKind = kind;
   S.combat = new Combat(S.run, foes, opts);
+  S.ending = false;
+  S.busy = false;
+  S.deal = 'start';
   // Slip into the Between
   const veil = document.createElement('div');
   veil.className = 'slip';
@@ -474,7 +478,12 @@ function afterCombatRender() {
     const el = app.querySelector(`[data-uid="${e.uid}"]`);
     if (!el) continue;
     let text = null, cls = '';
-    if (e.type === 'hit') { text = e.n ? `-${e.n}` : (e.blocked ? 'blocked' : '0'); cls = e.n ? 'dmg' : 'blocked'; shake(el, delay); }
+    if (e.type === 'hit') {
+      text = e.n ? `-${e.n}` : (e.blocked ? 'blocked' : '0'); cls = e.n ? 'dmg' : 'blocked'; shake(el, delay);
+      if (e.n) hurt(el.querySelector('.foe-art, .hero-art'), delay);
+      if (e.uid === 'player' && e.n >= 12) quake();
+    }
+    else if (e.type === 'die') { dissolve(el); continue; }
     else if (e.type === 'burn') { text = `-${e.n} 🔥`; cls = 'dmg burn'; }
     else if (e.type === 'heal' && e.n) { text = `+${e.n}`; cls = 'heal'; }
     else if (e.type === 'cover') { text = `+${e.n} cover`; cls = 'cover'; }
@@ -486,8 +495,214 @@ function afterCombatRender() {
     }
     delay += 140;
   }
-  if (c.over === 'win') { S.busy = true; setTimeout(() => { S.busy = false; winFight(); }, 900); }
-  else if (c.over === 'lose') { S.busy = true; setTimeout(() => { S.busy = false; loseFight(); }, 1200); }
+  if (S.deal) { dealHand(S.deal === 'start' ? 900 : 0); S.deal = false; }
+  // Several renders can happen after the last blow; only the first one ends the fight.
+  if (c.over && !S.ending) {
+    S.ending = true;
+    S.busy = true;
+    setTimeout(() => { S.busy = false; c.over === 'win' ? winFight() : loseFight(); }, c.over === 'win' ? 1100 : 1400);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Combat animation. The rules resolve instantly; these effects play on a
+// fixed overlay (#fx) so a re-render never cuts them off.
+// ---------------------------------------------------------------------------
+const reducedMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sleep = ms => new Promise(r => setTimeout(r, reducedMotion() ? 0 : ms));
+const centerOf = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+const animate = (el, frames, opts) => (el && el.animate && !reducedMotion() ? el.animate(frames, opts) : null);
+
+function fxNode(cls, x, y, ttl = 700) {
+  const d = document.createElement('div');
+  d.className = 'fx ' + cls;
+  d.style.left = x + 'px';
+  d.style.top = y + 'px';
+  fxLayer.appendChild(d);
+  setTimeout(() => d.remove(), ttl);
+  return d;
+}
+
+function burst(p, cls, delay = 0) {
+  if (reducedMotion() || !p) return;
+  setTimeout(() => fxNode('burst ' + cls, p.x, p.y).style.setProperty('--r', Math.random()), delay);
+}
+
+function tracer(from, to, cls = '', delay = 0) {
+  if (reducedMotion()) return;
+  setTimeout(() => {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const t = fxNode('tracer ' + cls, from.x, from.y, 500);
+    t.style.width = Math.hypot(dx, dy) + 'px';
+    t.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+  }, delay);
+}
+
+function slash(el, cls, delay = 0) {
+  if (reducedMotion() || !el) return;
+  setTimeout(() => {
+    const r = el.getBoundingClientRect();
+    const d = fxNode('slash ' + cls, r.left + r.width / 2, r.top + r.height * 0.45, 600);
+    d.innerHTML = '<i></i><i></i><i></i>';
+  }, delay);
+}
+
+function hurt(el, delay = 0) {
+  if (!el) return;
+  setTimeout(() => { el.classList.remove('hurt'); void el.offsetWidth; el.classList.add('hurt'); }, delay);
+}
+
+function quake() {
+  if (reducedMotion()) return;
+  app.classList.remove('quake'); void app.offsetWidth; app.classList.add('quake');
+}
+
+/** A slain demon burns away: a copy of its art flares, rises and fades, shedding embers. */
+function dissolve(foeEl) {
+  const img = foeEl.querySelector('.foe-art .paint, .foe-art svg');
+  if (!img || reducedMotion()) return;
+  const r = img.getBoundingClientRect();
+  const ghost = img.cloneNode(true);
+  ghost.className = 'fx dying';
+  Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+  fxLayer.appendChild(ghost);
+  animate(ghost, [
+    { filter: 'brightness(1)', transform: 'none', opacity: 1 },
+    { filter: 'brightness(3) sepia(1) saturate(4) hue-rotate(-20deg)', transform: 'translateY(-4px) scale(1.03)', opacity: 1, offset: 0.25 },
+    { filter: 'brightness(4) blur(6px)', transform: 'translateY(-40px) scale(1.12)', opacity: 0 },
+  ], { duration: 1100, easing: 'ease-in' });
+  setTimeout(() => ghost.remove(), 1150);
+  for (let k = 0; k < 10; k++) {
+    burst({ x: r.left + r.width * (0.2 + Math.random() * 0.6), y: r.top + r.height * (0.2 + Math.random() * 0.7) }, 'ember', k * 60);
+  }
+}
+
+/** Fly a copy of a card from the hand toward a point, then let it burn out. */
+function flyCard(cardEl, to, spin = 0) {
+  if (!cardEl || reducedMotion()) return;
+  const r = cardEl.getBoundingClientRect();
+  const ghost = cardEl.cloneNode(true);
+  ghost.classList.add('fx', 'ghost');
+  Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+  fxLayer.appendChild(ghost);
+  const dx = to.x - (r.left + r.width / 2), dy = to.y - (r.top + r.height / 2);
+  animate(ghost, [
+    { transform: 'translate(0, 0) scale(1) rotate(0deg)', opacity: 1, filter: 'brightness(1)' },
+    { transform: `translate(${dx * 0.3}px, ${dy * 0.3 - 70}px) scale(1.12) rotate(${-spin / 2}deg)`, opacity: 1, filter: 'brightness(1.25)', offset: 0.4 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.3) rotate(${spin}deg)`, opacity: 0, filter: 'brightness(2.5)' },
+  ], { duration: 460, easing: 'cubic-bezier(.45,0,.75,1)' });
+  setTimeout(() => ghost.remove(), 480);
+}
+
+/** New hand: cards slide in one by one from the draw pile. */
+function dealHand(wait = 0) {
+  const pile = app.querySelector('[data-pile="draw_"]');
+  if (!pile) return;
+  const from = centerOf(pile);
+  app.querySelectorAll('.hand .slot .card').forEach((el, k) => {
+    const to = centerOf(el);
+    animate(el, [
+      { transform: `translate(${from.x - to.x}px, ${from.y - to.y}px) scale(.35) rotate(25deg)`, opacity: 0 },
+      { transform: 'none', opacity: 1 },
+    ], { duration: 380, delay: wait + k * 70, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' });
+  });
+}
+
+const gunPoint = heroEl => { const r = heroEl.getBoundingClientRect(); return { x: r.left + r.width * 0.78, y: r.top + r.height * 0.42 }; };
+
+/** Play card `i` at `uid` with the hero's action, then resolve it. */
+async function playCard(i, uid) {
+  const c = S.combat;
+  const card = c.hand[i];
+  const def = CARDS[card.id];
+  S.busy = true;
+  S.sel = null;
+  const cardEl = app.querySelector(`.slot[data-i="${i}"] .card`);
+  const heroEl = app.querySelector('.hero-art');
+  const foeArt = u => app.querySelector(`.foe[data-uid="${u}"] .foe-art`);
+  const targets = def.target === 'enemy' ? [foeArt(uid) || foeArt(c.alive()[0].uid)]
+    : def.target === 'all' ? [...app.querySelectorAll('.foe:not(.dead) .foe-art')] : [];
+  const dest = targets.length === 1 ? centerOf(targets[0])
+    : targets.length ? centerOf(app.querySelector('.foes')) : centerOf(heroEl);
+
+  flyCard(cardEl, dest, def.type === 'attack' ? 14 : 0);
+  if (cardEl) cardEl.style.visibility = 'hidden';
+  await sleep(260);
+
+  if (def.type === 'attack') {
+    animate(heroEl, [{ transform: 'none' }, { transform: 'translateX(28px) rotate(2deg)', offset: 0.3 }, { transform: 'none' }], { duration: 380, easing: 'ease-out' });
+    if (def.rounds) {
+      const gun = gunPoint(heroEl);
+      const shots = def.rounds === 'all' ? c.p.rounds : card.id === 'ricochet' ? cardStats(card).v.n : Math.max(1, targets.length);
+      for (let k = 0; k < shots; k++) {
+        const t = targets[k % targets.length] || targets[0];
+        if (!t) break;
+        const p = centerOf(t);
+        const hitP = { x: p.x + (Math.random() * 40 - 20), y: p.y + (Math.random() * 60 - 40) };
+        burst(gun, 'muzzle', k * 70);
+        tracer(gun, hitP, card.id === 'hellfire_round' || c.p.pw.consecrated ? 'fire' : '', k * 70);
+        burst(hitP, 'spark', k * 70 + 90);
+      }
+      quake();
+    } else {
+      targets.forEach((t, k) => slash(t, 'blade', k * 60));
+    }
+  } else if (def.type === 'power') {
+    burst(centerOf(heroEl), 'aura power');
+  } else if (targets.length) {
+    targets.forEach(t => { tracer(gunPoint(heroEl), centerOf(t), 'hex'); burst(centerOf(t), 'hexhit', 160); });
+  } else {
+    burst(centerOf(heroEl), 'shield');
+  }
+  await sleep(170);
+  c.play(i, uid);
+  S.busy = false;
+  render();
+}
+
+/** End the turn: the hand is swept away, then each demon acts in turn. */
+async function runEnemyTurn() {
+  const c = S.combat;
+  S.busy = true;
+  S.sel = null;
+  const pile = app.querySelector('[data-pile="discard"]');
+  if (pile) {
+    const to = centerOf(pile);
+    app.querySelectorAll('.hand .slot .card').forEach(el => flyCard(el, to, 20));
+  }
+  await sleep(300);
+  const queue = c.beginEnemyPhase();
+  render();
+  await sleep(250);
+  for (const e of queue) {
+    if (c.over) break;
+    if (e.hp <= 0) continue;
+    const art = app.querySelector(`.foe[data-uid="${e.uid}"] .foe-art`);
+    const heroEl = app.querySelector('.hero-art');
+    const m = e.intent;
+    if (art && m) {
+      if (m.atk) {
+        animate(art, [{ transform: 'none' }, { transform: 'translateX(-80px) scale(1.08)', offset: 0.35 }, { transform: 'none' }], { duration: 560, easing: 'ease-in-out' });
+        await sleep(200);
+        for (let h = 0; h < (m.hits || 1); h++) slash(heroEl, 'claw', h * 120);
+      } else {
+        animate(art, [{ filter: 'brightness(1)' }, { filter: 'brightness(1.9) drop-shadow(0 0 18px #ff6a2b)' }, { filter: 'brightness(1)' }], { duration: 560 });
+        await sleep(200);
+      }
+      if (m.block) burst(centerOf(art), 'shield');
+      if (m.wrath || m.heal) burst(centerOf(art), 'aura');
+      if (m.summon) burst(centerOf(art), 'aura summon');
+      if (m.shaken || m.exposed || m.burn || m.curse) { tracer(centerOf(art), centerOf(heroEl), 'hex'); burst(centerOf(heroEl), 'hexhit', 160); }
+    }
+    c.enemyStep(e);
+    await sleep(340);
+    render();
+    await sleep(420);
+  }
+  c.endEnemyPhase();
+  S.busy = false;
+  S.deal = true;
+  render();
 }
 
 function floater(el, text, cls, delay, dy = 0) {
@@ -524,25 +739,22 @@ function clickCard(i) {
   if (S.sel === i) { S.sel = null; render(); return; }
   if (c.needsTarget(card) && c.alive().length > 1) { S.sel = i; render(); return; }
   S.sel = null;
-  c.play(i, c.alive()[0] && c.alive()[0].uid);
-  render();
+  playCard(i, c.alive()[0] && c.alive()[0].uid);
 }
 
 function clickTarget(uid) {
   const c = S.combat;
   if (S.sel === null) return;
+  if (S.busy || c.over) return;
   const i = S.sel;
   S.sel = null;
-  c.play(i, uid);
-  render();
+  playCard(i, uid);
 }
 
 function endTurn() {
   const c = S.combat;
   if (S.busy || c.over) return;
-  S.sel = null;
-  c.endTurn();
-  render();
+  runEnemyTurn();
 }
 
 function flashLog(msg) {

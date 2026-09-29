@@ -280,23 +280,33 @@ class Combat {
   }
 
   endTurn() {
-    if (this.over) return;
-    // discard hand, ethereal cards fade
+    for (const e of this.beginEnemyPhase()) this.enemyStep(e);
+    this.endEnemyPhase();
+  }
+
+  // The enemy turn in three steps, so the UI can animate one demon at a time.
+  /** Discard the hand and return the demons that will act (a snapshot, so fresh summons wait a turn). */
+  beginEnemyPhase() {
+    if (this.over) return [];
     for (const c of this.hand) (CARDS[c.id].ethereal ? this.exhausted : this.discard).push(c);
     this.hand = [];
     this.decay(this.p);
+    return this.alive();
+  }
 
-    // enemies act (snapshot, so fresh summons wait a turn)
-    for (const e of this.alive()) {
-      e.block = 0;
-      this.tickBurn(e);
-      if (e.hp <= 0 || this.over) continue;
-      this.act(e);
-      if (this.over) return;
-      this.decay(e);
-      e.step++;
-      this.chooseIntent(e);
-    }
+  enemyStep(e) {
+    if (this.over || e.hp <= 0) return;
+    e.block = 0;
+    this.tickBurn(e);
+    if (e.hp <= 0 || this.over) return;
+    this.act(e);
+    if (this.over) return;
+    this.decay(e);
+    e.step++;
+    this.chooseIntent(e);
+  }
+
+  endEnemyPhase() {
     if (this.over) return;
     this.startTurn();
   }
