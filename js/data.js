@@ -601,6 +601,20 @@ const STYLE_UNLOCKS = {
 // THE LEDGER — difficulty. Each page adds to the ones before it. Winning on
 // the highest page you have unlocked opens the next.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// THE DAILY HUNT — one seeded run a day, the same for everyone, with one twist.
+// ---------------------------------------------------------------------------
+const DAILY_TWISTS = {
+  blind:       { name: 'Blind Faith', desc: 'No Veil Sight this hunt. Every town is pure detective work (+1 question in each).' },
+  blood_moon:  { name: 'Blood Moon', desc: 'Every demon starts each fight with 1 Wrath. So do you.' },
+  hot_lead:    { name: 'Hot Lead', desc: 'Every Lead round sets its target burning (1 Hellfire).' },
+  glass_jaw:   { name: 'Glass Jaw', desc: 'You start at 60% health, but campfires heal twice as much.' },
+  gold_rush:   { name: 'Gold Rush', desc: 'Every fight pays double gold. Trading posts charge half again as much.' },
+  heavy_heart: { name: 'Heavy Heart', desc: 'Grief rides in your deck, but you start with an extra keepsake.' },
+  tight_lips:  { name: 'Tight Lips', desc: 'Two fewer questions in every town, but one more Veil Sight.' },
+  quick_draw:  { name: 'Quick Draw', desc: 'Draw an extra card every turn, but every fight starts with only three rounds loaded.' },
+};
+
 const LEDGER = [
   { name: 'The Hunt', desc: 'The story as written.' },
   { name: 'Page One', desc: 'Demons have 10% more HP.' },
@@ -1457,5 +1471,5 @@ function storyFor(hero) {
 
 // Make available to Node (tests) as well as the browser.
 if (typeof module !== 'undefined') {
-  module.exports = { CHAR_STORY, storyFor, HEROES, STYLE_UNLOCKS, LEDGER, cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
+  module.exports = { DAILY_TWISTS, CHAR_STORY, storyFor, HEROES, STYLE_UNLOCKS, LEDGER, cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
 }

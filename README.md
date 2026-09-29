@@ -31,6 +31,11 @@ To serve it locally instead: `npm start`, or run any static file server in this 
 - **Three hunters.** *Jonah Crane* is the story as written. *Martha Wheeler*, the widow of the man Jonah hanged, unlocks when you finish the hunt: a shotgun, Buckshot rounds, less Veil Sight but extra questions, and her own story to clear Eli's name. *Sister Agnes*, Ruth's confidante, unlocks when you tell her the truth: frail, four Veil Sight, Blessed rounds and hotter Hellfire, and her own story. Each hunter has their own letters, boss dialogue, story stops, memories and three endings.
 - **The Ledger.** Difficulty pages that stack: tougher demons, harder hits, fewer questions and weaker campfires, stronger elites and bosses, and a Grief in your deck. Winning on the highest page you've opened unlocks the next.
 - **Saves.** The run is saved in your browser at every stop on the trail. Continue from the title screen.
+- **A guided first run.** On your first hunt, coach marks walk you through the map, the first town (questions, contradictions, the Veil) and the first fight (Grit, the cylinder and which round fires next, intents, Reload), one at a time. Skip them any time; turn them back on in Settings.
+- **The Daily Hunt.** One seeded run a day, the same for everyone: the same hunter, towns, fights and card offers, plus one twist (Blind Faith, Blood Moon, Hot Lead, Glass Jaw, Gold Rush, Heavy Heart, Tight Lips, Quick Draw). It has its own save slot, nothing unlocks, and the first finish counts. You get a result line to share, like `Slinger Daily #41 · Blood Moon · Martha · Ch III · 3 clean solves · ☠ Silk Widow`.
+- **The Casebook.** Detective work with no fighting: a file of three cases, each with **two** demons among four or five strangers. The last case adds a human who lies about where they were. Each case has a par (the fewest questions that can crack it, computed by brute force), and you score 100 per case, minus 10 per question over par, 40 for using the Veil and 50 per wrong draw. Tap the ? on a stranger to keep notes. The test suite proves every case has exactly one explanation.
+- **Records.** Hunts ridden and won per hunter, the hardest Ledger page you've beaten, endings seen, demons sent back, clean solves and your clean-solve streak, recent Daily results and your best Casebook file.
+- **Settings.** Fast animations, four text sizes, and whether letters and taunts are read aloud automatically.
 - **Combat.** You get **Grit** (energy) every turn to spend on cards. **Rounds** are bullets in a six-shooter. Shot cards spend them, and they only come back when you play **Reload**. **Cover** blocks damage. The icons over each demon show what it will do next.
 - **Statuses.** Wrath adds damage to every hit, Exposed takes +50% damage, Shaken deals −25%, and Hellfire burns every turn.
 - **Keepsakes** (relics). You start with your old Tin Star and Clara's Locket. Beating a boss gives you a keepsake of the sibling you avenged.
@@ -50,6 +55,7 @@ Keys in combat: `1`–`9` play a card, `E` ends your turn, `Esc` cancels targeti
 | `js/audio.js` | Sound effects and music, all synthesized with Web Audio (no audio files): plucked guitar, whistle, drones, bells, gunshots with canyon echo |
 | `art/voice/` | Voiced lines (Higgsfield, ElevenLabs voices): the three chapter letters, each boss's taunt and last words, and the finale |
 | `js/ui.js` | Screens, input handling, and combat animation (card flights, gunfire tracers, slashes, demon lunges, death burns) |
+| `js/modes.js` | Settings, Records, the guided first run, the Daily Hunt, and the Casebook |
 | `css/style.css` | Styling for daylight and for the Between |
 | `tests/sim.js` | Headless simulation. A greedy bot plays hundreds of full runs, checking invariants and reporting win rate |
 

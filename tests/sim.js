@@ -4,7 +4,7 @@
 const assert = require('assert');
 const D = require('../js/data.js');
 Object.assign(globalThis, D);
-const { Combat, Run, cardStats, STEPS_PER_CHAPTER } = require('../js/game.js');
+const { Combat, Run, cardStats, STEPS_PER_CHAPTER, makeCase, caseSolutions, makeRng } = require('../js/game.js');
 
 function botTurn(c) {
   let guard = 0;
@@ -125,6 +125,47 @@ function suspects(town) {
     assert.strictEqual(new Set(t.folk.map(f => f.name.split(' ')[0])).size, 3, 'first names must be unique');
   }
   console.log('detective: 500 towns, every one solvable, the demon always the only consistent liar');
+}
+
+// Casebook cases: exactly one pair of strangers can be the demons, and it's the right pair.
+{
+  const rng = makeRng(7);
+  for (const spec of [{ n: 4 }, { n: 5 }, { n: 5, fibber: true }]) {
+    let parSum = 0;
+    for (let i = 0; i < 150; i++) {
+      const c = makeCase(rng, spec);
+      assert.strictEqual(c.folk.length, spec.n);
+      const sols = caseSolutions(c);
+      assert.strictEqual(sols.length, 1, 'case should have exactly one explanation');
+      assert(sols[0].every(k => c.folk[k].demon), 'the one explanation must name both demons');
+      assert.strictEqual(c.folk.filter(f => f.demon).length, 2);
+      assert.strictEqual(new Set(c.folk.map(f => f.name.split(' ')[0])).size, spec.n, 'first names must be unique');
+      assert(c.par >= 1 && c.par <= spec.n * 2);
+      // Hearing every statement always cracks it.
+      assert.strictEqual(caseSolutions(c, () => true).length, 1);
+      if (spec.fibber) {
+        const fib = c.folk.find(f => f.fibber);
+        assert(fib && !fib.demon && fib.claim.at !== fib.truthAt, 'the fibber lies about where they were');
+        assert(c.folk.some(f => !f.demon && f !== fib && f.claim.saw[0] === fib.name), 'someone catches the fibber out');
+      }
+      parSum += c.par;
+    }
+    console.log(`casebook: 150 cases of ${spec.n}${spec.fibber ? ' with a lying witness' : ''}, all fair, average par ${(parSum / 150).toFixed(1)}`);
+  }
+}
+
+// Daily twists: every twist plays through without breaking the rules.
+{
+  const line = [];
+  for (const tw of Object.keys(DAILY_TWISTS)) {
+    let w = 0;
+    for (let i = 0; i < 30; i++) {
+      const res = playRun(1000 + i, { hero: Object.keys(HEROES)[i % 3], styles: ['brawl', 'seer'], mode: 'daily', daily: i, twist: tw });
+      if (res.win) w++;
+    }
+    line.push(`${tw} ${Math.round(100 * w / 30)}%`);
+  }
+  console.log('daily twists (bot win rate): ' + line.join(', '));
 }
 
 const N = +process.argv[2] || 300;

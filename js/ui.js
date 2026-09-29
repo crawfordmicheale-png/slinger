@@ -26,6 +26,23 @@ const S = {
   flash: '',         // one-line message on a screen
 };
 
+// ---- settings: stored per browser -------------------------------------------------
+const SETTINGS_KEY = 'slinger.settings.v1';
+const TEXT_SIZES = { small: 0.9, normal: 1, large: 1.15, huge: 1.3 };
+const SETTINGS = Object.assign({ fast: false, text: 'normal', autoVoice: true }, (() => {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch (e) { return {}; }
+})());
+function applySettings() {
+  document.body.classList.toggle('fast', !!SETTINGS.fast);
+  document.documentElement.style.setProperty('--ts', TEXT_SIZES[SETTINGS.text] || 1);
+}
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS)); } catch (e) { /* storage unavailable */ }
+  applySettings();
+}
+/** Animation time scale: fast mode plays everything in a bit under half the time. */
+const SPD = () => (SETTINGS.fast ? 0.45 : 1);
+
 // The story as the current hunter lives it, and a title swap for generic text.
 const ST = () => storyFor(S.run ? S.run.hero : 'jonah');
 const heroDef = () => HEROES[S.run ? S.run.hero : 'jonah'];
@@ -166,10 +183,10 @@ const replay = id => `<button class="btn small replay" data-act="voice" data-id=
 function setScreen(name) {
   const prev = S.screen;
   S.screen = name;
-  if (name === 'map' || name === 'chapterIntro') saveRun();
-  if (name === 'gameover' || name === 'victory') clearSave();
+  if (S.run && (name === 'map' || name === 'chapterIntro')) saveRun();
+  if (S.run && (name === 'gameover' || name === 'victory')) clearSave(S.run.mode);
   AUDIO.music(musicFor(name));
-  if (name !== prev) AUDIO.voice(voiceFor(name));
+  if (name !== prev && SETTINGS.autoVoice && S.run) AUDIO.voice(voiceFor(name));
   S.sel = null;
   document.body.classList.toggle('between', name === 'combat' || name === 'finale');
   render();
@@ -182,6 +199,7 @@ function render() {
   app.className = 'screen-' + S.screen;
   app.innerHTML = fn ? fn() : '';
   if (S.screen === 'combat') afterCombatRender();
+  if (typeof coach === 'function') coach();
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +217,15 @@ const SCREENS = {
           return sv ? `<button class="btn big" data-act="continue">Continue<br><small>${esc(CHAPTERS[Math.min(3, sv.chapter)].title)} · ♥ ${sv.hp}/${sv.maxHp}</small></button>` : '';
         })()}
         <button class="btn ${loadSave() ? '' : 'big'}" data-act="setup">${loadSave() ? 'New Hunt' : 'Ride Out'}</button>
-        <button class="btn" data-act="how">How to Play</button>
+        <div class="menu-row">
+          <button class="btn" data-act="daily">Daily Hunt<br><small>#${dailyInfo().num} · ${esc(DAILY_TWISTS[dailyInfo().twist].name)}</small></button>
+          <button class="btn" data-act="casebook">The Casebook<br><small>Pure detective work</small></button>
+        </div>
+        <div class="menu-row">
+          <button class="btn" data-act="records">Records</button>
+          <button class="btn" data-act="how">How to Play</button>
+          <button class="btn" data-act="settings">Settings</button>
+        </div>
         <div class="title-sound">${soundButtons()}</div>
       </div>
     </section>`,
@@ -229,6 +255,7 @@ const SCREENS = {
         </div>
         <p class="sub">${esc(LEDGER.slice(1, lvl + 1).map(l => l.desc).join(' ') || LEDGER[0].desc)}</p>
         <ul class="unlocks">${styles}</ul>
+        <label class="tutor-toggle"><input type="checkbox" data-act="toggle-tutor" ${tutorWanted() ? 'checked' : ''}> Show me the ropes (a guided first town and first fight)</label>
         <div class="row center"><button class="btn big" data-act="new-run">Ride out</button><button class="btn" data-act="title">Back</button></div>
       </section>`;
   },
@@ -545,6 +572,7 @@ const SCREENS = {
       <h2>${esc(e.title)}</h2>
       ${e.text.map(p => `<p>${esc(p)}</p>`).join('')}
       ${S.unlockNote ? `<p class="loot-note">${esc(S.unlockNote)}</p>` : ''}
+      ${S.run.mode === 'daily' ? dailyShareHTML() : ''}
       <p class="stats">${esc(heroDef().name)} · ${esc(LEDGER[S.run.ledger].name)} · Demons sent back: ${S.run.kills} · Innocents wronged: ${S.run.innocents} · Infamy: ${S.run.infamy} · Journal entries: ${S.run.journal.length}</p>
       <button class="btn big" data-act="title">The End</button>
     </section>`;
@@ -555,7 +583,7 @@ const SCREENS = {
       <h2>Here lies ${esc(heroDef().name)}</h2>
       <p>${esc(STORY.death)}</p>
       <p class="stats">${esc(CHAPTERS[Math.min(3, S.run.chapter)].title)} · Demons sent back: ${S.run.kills}</p>
-      <button class="btn big" data-act="new-run">Ride again</button>
+      ${S.run.mode === 'daily' ? dailyShareHTML() : '<button class="btn big" data-act="new-run">Ride again</button>'}
       <button class="btn" data-act="title">Title</button>
     </section>`,
 };
@@ -575,7 +603,7 @@ const INTENT_ICON = { atk: '⚔ ', def: '⛨ ', buff: '▲ ', debuff: '☠ ', su
 // Flow
 // ---------------------------------------------------------------------------
 function newRun() {
-  clearSave();
+  clearSave('story');
   const prof = loadProfile();
   const hero = S.setupHero || 'jonah';
   const h = HEROES[hero];
@@ -583,7 +611,9 @@ function newRun() {
     hero: h.unlock && !prof.unlocks[h.unlock.key] ? 'jonah' : hero,
     ledger: Math.min(S.setupLedger || 0, prof.ledger),
     styles: Object.keys(STYLE_UNLOCKS).filter(k => prof.unlocks[k]),
+    tutorial: tutorWanted(),
   });
+  recordRunStart(S.run);
   S.combat = null;
   setScreen('intro');
 }
@@ -682,8 +712,12 @@ function unlock(key) {
   toast(`Unlocked: ${UNLOCK_NAMES[key]}${key === 'brawl' || key === 'seer' ? ' (in future card rewards)' : ' (a new hunter)'}`);
   return UNLOCK_NAMES[key];
 }
-function unlockAfterBoss(ch) { if (ch === 1) unlock('brawl'); if (ch === 2) unlock('seer'); }
+function unlockAfterBoss(ch) {
+  if (S.run && S.run.mode === 'daily') return;
+  if (ch === 1) unlock('brawl'); if (ch === 2) unlock('seer');
+}
 function unlockAfterWin(run) {
+  if (run.mode === 'daily') return '';
   const got = [];
   const m = unlock('martha'); if (m) got.push(m);
   const p = loadProfile();
@@ -692,7 +726,7 @@ function unlockAfterWin(run) {
   saveProfile(p);
   return got.length ? 'Unlocked: ' + got.join(', ') + '.' : '';
 }
-function campHeal(r) { return Math.floor(r.maxHp * (r.ledger >= 3 ? 0.2 : 0.3)); }
+function campHeal(r) { return Math.floor(r.maxHp * (r.ledger >= 3 ? 0.2 : 0.3) * (r.twist === 'glass_jaw' ? 2 : 1)); }
 function toast(text) {
   const t = document.createElement('div');
   t.className = 'toast';
@@ -700,13 +734,16 @@ function toast(text) {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 4200);
 }
-function saveRun() { try { if (S.run) localStorage.setItem(SAVE_KEY, JSON.stringify(S.run)); } catch (e) { /* storage unavailable */ } }
-function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage unavailable */ } }
-function loadSave() {
-  try { const raw = localStorage.getItem(SAVE_KEY); return raw ? Run.fromJSON(JSON.parse(raw)) : null; } catch (e) { return null; }
+// The Daily Hunt keeps its own save slot, so it never overwrites a story run.
+const DAILY_SAVE_KEY = 'slinger.daily.v1';
+const saveKey = mode => (mode === 'daily' ? DAILY_SAVE_KEY : SAVE_KEY);
+function saveRun() { try { if (S.run) localStorage.setItem(saveKey(S.run.mode), JSON.stringify(S.run)); } catch (e) { /* storage unavailable */ } }
+function clearSave(mode = 'story') { try { localStorage.removeItem(saveKey(mode)); } catch (e) { /* storage unavailable */ } }
+function loadSave(mode = 'story') {
+  try { const raw = localStorage.getItem(saveKey(mode)); return raw ? Run.fromJSON(JSON.parse(raw)) : null; } catch (e) { return null; }
 }
-function continueRun() {
-  const r = loadSave();
+function continueRun(mode = 'story') {
+  const r = loadSave(mode);
   if (!r) { setScreen('title'); return; }
   S.run = r;
   S.combat = null;
@@ -748,7 +785,7 @@ function startFight(foes, kind, opts = {}) {
   veil.className = 'slip';
   veil.innerHTML = `<span>${opts.ambushed ? 'It strikes first.' : 'The world slips.'}</span>`;
   document.body.appendChild(veil);
-  setTimeout(() => veil.remove(), 1600);
+  setTimeout(() => veil.remove(), 1600 * SPD());
   AUDIO.sfx('slip');
   setScreen('combat');
 }
@@ -794,6 +831,9 @@ function winFight() {
 }
 
 function loseFight() {
+  const foes = S.combat.enemies;
+  const killer = foes.find(e => e.hp > 0 && e.boss) || foes.find(e => e.hp > 0) || foes[0];
+  recordRunEnd(S.run, { win: false, killer: killer ? killer.name : 'the Between' });
   S.combat.finish();
   AUDIO.sfx('toll');
   setScreen('gameover');
@@ -836,14 +876,14 @@ function afterCombatRender() {
       const k = stack[e.uid] = (stack[e.uid] || 0) + 1;
       floater(el, text, cls, delay, (k - 1) * 26);
     }
-    delay += 140;
+    delay += 140 * SPD();
   }
   if (S.deal) { dealHand(S.deal === 'start' ? 900 : 0); S.deal = false; }
   // Several renders can happen after the last blow; only the first one ends the fight.
   if (c.over && !S.ending) {
     S.ending = true;
     S.busy = true;
-    setTimeout(() => { S.busy = false; c.over === 'win' ? winFight() : loseFight(); }, c.over === 'win' ? 1100 : 1400);
+    setTimeout(() => { S.busy = false; c.over === 'win' ? winFight() : loseFight(); }, (c.over === 'win' ? 1100 : 1400) * SPD());
   }
 }
 
@@ -852,9 +892,10 @@ function afterCombatRender() {
 // fixed overlay (#fx) so a re-render never cuts them off.
 // ---------------------------------------------------------------------------
 const reducedMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-const sleep = ms => new Promise(r => setTimeout(r, reducedMotion() ? 0 : ms));
+const sleep = ms => new Promise(r => setTimeout(r, reducedMotion() ? 0 : ms * SPD()));
 const centerOf = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
-const animate = (el, frames, opts) => (el && el.animate && !reducedMotion() ? el.animate(frames, opts) : null);
+const animate = (el, frames, opts) => (el && el.animate && !reducedMotion()
+  ? el.animate(frames, { ...opts, duration: (opts.duration || 0) * SPD(), delay: (opts.delay || 0) * SPD() }) : null);
 
 function fxNode(cls, x, y, ttl = 700) {
   const d = document.createElement('div');
@@ -868,7 +909,7 @@ function fxNode(cls, x, y, ttl = 700) {
 
 function burst(p, cls, delay = 0) {
   if (reducedMotion() || !p) return;
-  setTimeout(() => fxNode('burst ' + cls, p.x, p.y).style.setProperty('--r', Math.random()), delay);
+  setTimeout(() => fxNode('burst ' + cls, p.x, p.y).style.setProperty('--r', Math.random()), delay * SPD());
 }
 
 function tracer(from, to, cls = '', delay = 0) {
@@ -878,7 +919,7 @@ function tracer(from, to, cls = '', delay = 0) {
     const t = fxNode('tracer ' + cls, from.x, from.y, 500);
     t.style.width = Math.hypot(dx, dy) + 'px';
     t.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-  }, delay);
+  }, delay * SPD());
 }
 
 function slash(el, cls, delay = 0) {
@@ -887,7 +928,7 @@ function slash(el, cls, delay = 0) {
     const r = el.getBoundingClientRect();
     const d = fxNode('slash ' + cls, r.left + r.width / 2, r.top + r.height * 0.45, 600);
     d.innerHTML = '<i></i><i></i><i></i>';
-  }, delay);
+  }, delay * SPD());
 }
 
 function hurt(el, delay = 0) {
@@ -948,7 +989,7 @@ function dealHand(wait = 0) {
       { transform: `translate(${from.x - to.x}px, ${from.y - to.y}px) scale(.35) rotate(25deg)`, opacity: 0 },
       { transform: 'none', opacity: 1 },
     ], { duration: 380, delay: wait + k * 70, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' });
-    AUDIO.sfx('deal', (wait + k * 70) / 1000);
+    AUDIO.sfx('deal', (wait + k * 70) * SPD() / 1000);
   });
 }
 
@@ -989,7 +1030,7 @@ async function playCard(i, uid) {
         const p = centerOf(t);
         const hitP = { x: p.x + (Math.random() * 40 - 20), y: p.y + (Math.random() * 60 - 40) };
         burst(gun, 'muzzle', k * 70);
-        AUDIO.sfx('shot', k * 0.07);
+        AUDIO.sfx('shot', k * 0.07 * SPD());
         const tcls = rd === 'silver' ? 'silver' : rd === 'blessed' ? 'holy' : rd === 'hellfire' || card.id === 'hellfire_round' || c.p.pw.consecrated ? 'fire' : '';
         tracer(gun, hitP, tcls, k * 70);
         burst(hitP, 'spark', k * 70 + 90);
@@ -1039,7 +1080,7 @@ async function runEnemyTurn() {
       if (m.atk) {
         animate(art, [{ transform: 'none' }, { transform: 'translateX(-80px) scale(1.08)', offset: 0.35 }, { transform: 'none' }], { duration: 560, easing: 'ease-in-out' });
         await sleep(200);
-        for (let h = 0; h < (m.hits || 1); h++) { slash(heroEl, 'claw', h * 120); AUDIO.sfx('claw', h * 0.12); }
+        for (let h = 0; h < (m.hits || 1); h++) { slash(heroEl, 'claw', h * 120); AUDIO.sfx('claw', h * 0.12 * SPD()); }
       } else {
         animate(art, [{ filter: 'brightness(1)' }, { filter: 'brightness(1.9) drop-shadow(0 0 18px #ff6a2b)' }, { filter: 'brightness(1)' }], { duration: 560 });
         await sleep(200);
@@ -1162,6 +1203,7 @@ function howToPlay() {
       <p><b>Grit</b> pays for cards and refills every turn. Shot cards (the ones with bullet pips) spend rounds, and rounds do <i>not</i> refill on their own. Play <b>Reload</b>.</p>
       <p><b>Cover</b> absorbs damage and fades at the start of your turn. Watch the icons over each demon: they show what it will do next.</p>
       <p><b>Wrath</b> adds damage to every hit. <b>Exposed</b> takes 50% more damage. <b>Shaken</b> deals 25% less. <b>Hellfire</b> burns every turn.</p>
+      <p><b>Other ways to ride.</b> The <b>Daily Hunt</b> is one run a day, the same for everyone, with a fixed hunter and one twist; share your result line when it's done. <b>The Casebook</b> is detective work only: three cases, two demons in each, scored against par. <b>Settings</b> has fast animations, bigger text and voice autoplay.</p>
       <p class="sub">Keys: 1–9 play a card, E ends your turn, Esc cancels.</p>
     </div>
     <div class="row center"><button class="btn" data-act="close-modal">Got it</button></div>`);
@@ -1207,6 +1249,7 @@ const ACTIONS = {
     const e = ST().endings[S.endingId];
     S.run.addJournal(e.title, e.text[0]);
     S.unlockNote = unlockAfterWin(S.run);
+    recordRunEnd(S.run, { win: true, ending: S.endingId });
     setScreen('victory');
   },
   'view-deck': () => showCards(`Your deck (${S.run.deck.length})`, S.run.deck, false),
@@ -1247,12 +1290,14 @@ const ACTIONS = {
       S.flash = '';
       S.guilt = null;
       S.cleanSolve = !t.usedSight;
+      recordTown(S.cleanSolve);
       startFight(t.enc.foes, 'normal', { drop: true });
     } else {
       f.gone = true;
       S.cleanSolve = false;
       r.innocents++;
       S.guilt = f.name;
+      recordTown(false);
       r.addInfamy(3);
       AUDIO.sfx('wrong');
       r.addCard('blood_on_hands');
@@ -1262,7 +1307,7 @@ const ACTIONS = {
       render();
     }
   },
-  'leave-town': () => { S.cleanSolve = false; S.run.addInfamy(1); startFight(S.town.enc.foes, 'normal', { ambushed: true }); },
+  'leave-town': () => { S.cleanSolve = false; recordTown(false); S.run.addInfamy(1); startFight(S.town.enc.foes, 'normal', { ambushed: true }); },
   'fight-elite': () => startFight(ENCOUNTERS[S.run.chapter].elite.foes, 'elite'),
   'fight-boss': () => startFight(ST().boss(S.run.chapter).foes, 'boss'),
 
@@ -1354,7 +1399,7 @@ const ACTIONS = {
   },
   'belt-slot': el => beltClick(+el.dataset.i),
   'belt': () => showBelt(),
-  'continue': continueRun,
+  'continue': () => continueRun('story'),
   'buy-keepsake': () => {
     const r = S.run; const k = S.shop.keepsake;
     if (k.sold || r.gold < k.price) return;
@@ -1395,7 +1440,7 @@ const ACTIONS = {
     if (o.req && !o.req(S.run)) return;
     S.eventResult = o.run(S.run, eventApi());
     S.run.hp = Math.min(S.run.hp, S.run.maxHp);
-    if (S.run.flags.confessed) unlock('agnes');
+    if (S.run.flags.confessed && S.run.mode !== 'daily') unlock('agnes');
     render();
   },
 };
@@ -1447,5 +1492,3 @@ document.addEventListener('mouseover', ev => {
   }
   box.innerHTML = html;
 })();
-
-render();

@@ -12,13 +12,17 @@ if (typeof module !== 'undefined' && typeof CARDS === 'undefined') {
 function makeRng(seed) {
   if (seed === undefined) return Math.random;
   let s = seed >>> 0;
-  return () => { // mulberry32
+  const rng = () => { // mulberry32
     s = (s + 0x6D2B79F5) >>> 0;
     let t = s;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+  // A seeded run saves its place in the sequence, so a resumed Daily Hunt plays out the same.
+  rng.save = () => s;
+  rng.load = v => { s = v >>> 0; };
+  return rng;
 }
 const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
 const randInt = (rng, lo, hi) => lo + Math.floor(rng() * (hi - lo + 1));
@@ -100,6 +104,8 @@ class Combat {
     if (run.has('tin_star')) this.p.block += 6;
     if (run.has('war_paint')) this.p.st.wrath = 1;
     if (run.has('rattle')) this.applyAll('exposed', 1);
+    if (run.twist === 'blood_moon') { this.p.st.wrath = (this.p.st.wrath || 0) + 1; this.enemies.forEach(e => { e.st.wrath = (e.st.wrath || 0) + 1; }); }
+    if (run.twist === 'quick_draw') this.p.chambers = this.p.chambers.map((r, i) => (i < 3 ? r : null));
     if (opts.drop) { this.applyAll('exposed', 2); this.say('You got the drop on them.'); }
     if (opts.ambushed) { this.applySelf('shaken', 2); this.say('They got the drop on you.'); }
 
@@ -306,6 +312,7 @@ class Combat {
     this.damage(this.p, t, dmg);
     this.curRound = null;
     if (R && t.hp > 0 && R.onHit) R.onHit(this, t);
+    if (r === 'lead' && t.hp > 0 && this.run.twist === 'hot_lead') this.apply(t, 'burn', 1);
     if (R && R.splash) {
       const splash = R.splash + (this.run.has('eli_ring') ? 2 : 0);
       this.alive().filter(e => e !== t).forEach(e => this.damage(this.p, e, splash));
@@ -437,6 +444,7 @@ class Combat {
     if (p.pw.lawmans_instinct) p.block += p.pw.lawmans_instinct;
     let n = HERO.handSize;
     if (this.turn === 1 && this.run.has('snake_oil')) n += 2;
+    if (this.run.twist === 'quick_draw') n += 1;
     this.draw(n);
   }
 
@@ -585,6 +593,7 @@ class Run {
    *   hero   = which hunter (see HEROES)
    *   ledger = difficulty page, 0 to LEDGER.length - 1
    *   styles = unlocked card styles beyond the defaults (e.g. ['brawl', 'seer'])
+   *   mode   = 'story' | 'daily'; daily = the Daily Hunt number; twist = a DAILY_TWISTS id
    */
   constructor(seed, opts = {}) {
     this.rng = makeRng(seed);
@@ -611,24 +620,46 @@ class Run {
     this.tonics = h.tonics.slice();   // the satchel, up to TONIC_SLOTS
     this.infamy = 0;
     this.removals = 0;
+    this.mode = opts.mode || 'story';
+    this.daily = opts.daily || 0;
+    this.twist = DAILY_TWISTS[opts.twist] ? opts.twist : null;
+    this.cleanSolves = 0;
+    this.tutorial = !!opts.tutorial;
+    this.applyTwist();
     this.newMap();
+  }
+
+  /** The Daily Hunt's one change to the rules, applied at the start of the run. */
+  applyTwist() {
+    switch (this.twist) {
+      case 'blind': this.maxSight = this.sight = 0; break;
+      case 'tight_lips': this.maxSight++; this.sight++; break;
+      case 'glass_jaw': this.hp = Math.floor(this.maxHp * 0.6); break;
+      case 'heavy_heart': {
+        this.deck.push(newCard('grief'));
+        const k = this.randomKeepsake(); if (k) this.gainKeepsake(k);
+        break;
+      }
+    }
   }
 
   // ---- saving ---------------------------------------------------------------------
   static SAVE_FIELDS = ['hero', 'ledger', 'styles', 'map', 'path', 'hp', 'maxHp', 'gold', 'sight', 'maxSight', 'deck', 'keepsakes', 'chapter', 'step',
     'usedTowns', 'usedEvents', 'kills', 'innocents', 'flags', 'journal', 'belt', 'removals', 'choices',
-    'tonics', 'infamy'];
+    'tonics', 'infamy', 'mode', 'daily', 'twist', 'cleanSolves', 'tutorial'];
 
   toJSON() {
     const o = { v: 1 };
     for (const k of Run.SAVE_FIELDS) o[k] = this[k];
+    if (this.rng.save) o.rngState = this.rng.save();
     return o;
   }
 
   static fromJSON(o) {
     if (!o || o.v !== 1) return null;
-    const r = new Run();
+    const r = new Run(o.rngState === undefined ? undefined : 1);
     for (const k of Run.SAVE_FIELDS) if (o[k] !== undefined) r[k] = o[k];
+    if (o.rngState !== undefined) r.rng.load(o.rngState);
     // Card uids must stay unique after loading.
     _uid = Math.max(_uid, ...r.deck.map(c => c.uid + 1));
     return r;
@@ -814,7 +845,8 @@ class Run {
     return {
       name: this.townName(), folk, enc, scene,
       victim: pick(this.rng, CASE.victims),
-      questions: 5 + HEROES[this.hero].questions + (this.has('lawmans_notebook') ? 2 : 0) - (this.infamy >= 4 ? 1 : 0) - (this.infamy >= 7 ? 1 : 0) - (this.ledger >= 3 ? 1 : 0),
+      questions: 5 + HEROES[this.hero].questions + (this.has('lawmans_notebook') ? 2 : 0) - (this.infamy >= 4 ? 1 : 0) - (this.infamy >= 7 ? 1 : 0) - (this.ledger >= 3 ? 1 : 0)
+        + (this.twist === 'blind' ? 1 : 0) - (this.twist === 'tight_lips' ? 2 : 0),
       usedSight: false,
     };
   }
@@ -836,6 +868,7 @@ class Run {
   goldReward(kind) {
     let g = kind === 'boss' ? randInt(this.rng, 90, 110) : kind === 'elite' ? randInt(this.rng, 35, 50) : randInt(this.rng, 14, 24);
     if (this.has('horseshoe')) g += 15;
+    if (this.twist === 'gold_rush') g *= 2;
     return g;
   }
 
@@ -850,7 +883,7 @@ class Run {
   makeShop() {
     const cards = this.cardChoices(5, 0.06).map(id => ({ id, price: priceFor(CARDS[id].rarity, this.rng), sold: false }));
     const k = this.randomKeepsake();
-    const markup = p => Math.round(p * (1 + 0.06 * this.infamy));
+    const markup = p => Math.round(p * (1 + 0.06 * this.infamy) * (this.twist === 'gold_rush' ? 1.5 : 1));
     cards.forEach(c => { c.price = markup(c.price); });
     const rounds = shuffle(this.rng, SPECIAL_ROUNDS.slice()).slice(0, 2)
       .map(id => ({ id, price: markup(ROUNDS[id].price + randInt(this.rng, -3, 5)), sold: false }));
@@ -879,6 +912,123 @@ function weightedPick(rng, weights) {
   return entries[entries.length - 1][0];
 }
 
+// ---------------------------------------------------------------------------
+// THE CASEBOOK — detective work with no gunplay. Two demons hide among four or
+// five strangers. Humans tell the truth about what they saw; in the hardest
+// cases one of them lies about where they were (for their own reasons).
+// ---------------------------------------------------------------------------
+const CASE_QS = ['alibi', 'saw'];
+
+/**
+ * Every pair of strangers who could be the two demons, given what has been heard.
+ * @param {object} c          a case from makeCase
+ * @param {(i: number, q: string) => boolean} [known]  which statements count (default: all)
+ * @returns {number[][]} pairs [i, j] consistent with humans telling the truth
+ */
+function caseSolutions(c, known = () => true) {
+  const out = [];
+  const n = c.folk.length;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const humans = c.folk.map((f, k) => k).filter(k => k !== i && k !== j);
+    const fibs = c.fibber ? humans : [-1];
+    const ok = fibs.some(fib => {
+      const where = {};
+      const fact = (name, place) => {
+        if (where[name] && where[name] !== place) return false;
+        where[name] = place; return true;
+      };
+      return humans.every(k => {
+        const f = c.folk[k];
+        if (known(k, 'alibi') && k !== fib && !fact(f.name, f.claim.at)) return false;
+        if (known(k, 'saw') && !fact(f.claim.saw[0], f.claim.saw[1])) return false;
+        return true;
+      });
+    });
+    if (ok) out.push([i, j]);
+  }
+  return out;
+}
+
+/** The fewest questions that pin down both demons (the case's par). */
+function casePar(c) {
+  const stmts = [];
+  c.folk.forEach((f, i) => CASE_QS.forEach(q => stmts.push([i, q])));
+  let best = stmts.length;
+  for (let mask = 0; mask < 1 << stmts.length; mask++) {
+    let bits = 0; for (let m = mask; m; m &= m - 1) bits++;
+    if (bits >= best) continue;
+    const on = new Set(stmts.filter((s, k) => mask & (1 << k)).map(s => s.join()));
+    if (caseSolutions(c, (i, q) => on.has(i + ',' + q)).length === 1) best = bits;
+  }
+  return best;
+}
+
+/**
+ * Build a case that only one pair of demons can explain.
+ * @param {() => number} rng
+ * @param {{n?: number, fibber?: boolean}} [opts]  n = strangers (4 or 5)
+ */
+function makeCase(rng, opts = {}) {
+  const n = opts.n || 4;
+  const encs = Object.values(ENCOUNTERS).flatMap(ch => ch.normal).filter(e => !e.plural);
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const [e1, e2] = shuffle(rng, encs.slice()).filter((e, k, a) => a.findIndex(x => x.foes[0] === e.foes[0]) === k);
+    const pics = shuffle(rng, FOLK.portraits.slice());
+    const takePic = g => pics.splice(pics.findIndex(pt => pt.g === g), 1)[0];
+    const dp = [takePic(e1.g || 'm'), takePic(e2.g || 'm')];
+    const names = new Set();
+    const person = (pic, enc) => {
+      let name;
+      do { name = `${pick(rng, FOLK.first[pic.g])} ${pick(rng, FOLK.last)}`; } while (names.has(name.split(' ')[0]));
+      names.add(name.split(' ')[0]);
+      return {
+        name, img: pic.img, g: pic.g, demon: enc ? enc.foes[0] : null, fibber: false,
+        role: enc ? enc.role : pick(rng, pic.roles),
+        asked: { alibi: false, saw: false }, seen: false, caught: false, cleared: false,
+      };
+    };
+    const folk = [person(dp[0], e1), person(dp[1], e2)];
+    while (folk.length < n) folk.push(person(pics.pop(), null));
+    const scene = pick(rng, CASE.scenes);
+    const places = shuffle(rng, CASE.places.slice());
+    const humans = folk.filter(f => !f.demon);
+    const truth = {};
+    folk.forEach(f => { f.truthAt = truth[f.name] = f.demon ? scene : places.pop(); });
+    const fib = opts.fibber ? pick(rng, humans) : null;
+    if (fib) fib.fibber = true;
+    const first = name => name.split(' ')[0];
+    folk.forEach(f => {
+      const others = folk.filter(o => o !== f);
+      let at, saw;
+      if (!f.demon) {
+        at = f.fibber ? places.pop() : truth[f.name];
+        const who = pick(rng, others);
+        saw = [who.name, truth[who.name]];
+      } else {
+        at = pick(rng, CASE.places.filter(p => !Object.values(truth).includes(p) || rng() < 0.3));
+        const who = pick(rng, others.filter(o => !o.demon));
+        saw = [who.name, rng() < 0.6 ? scene : pick(rng, CASE.places.filter(p => p !== truth[who.name]))];
+      }
+      f.claim = { at, saw };
+    });
+    // Someone has to catch the fibber out, or the lie is invisible.
+    if (fib && !humans.some(h => h !== fib && h.claim.saw[0] === fib.name)) {
+      const w = pick(rng, humans.filter(h => h !== fib));
+      w.claim.saw = [fib.name, truth[fib.name]];
+    }
+    const c = { folk: shuffle(rng, folk), scene, fibber: !!fib, victim: pick(rng, CASE.victims) };
+    const sols = caseSolutions(c);
+    if (sols.length !== 1) continue;
+    c.folk.forEach(f => {
+      f.alibi = pick(rng, CASE.alibi)(f.claim.at);
+      f.saw = pick(rng, CASE.saw)(first(f.claim.saw[0]), f.claim.saw[1]);
+    });
+    c.par = casePar(c);
+    return c;
+  }
+  throw new Error('could not build a fair case');
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { Combat, Run, cardStats, newCard, makeRng, shuffle, pick, STEPS_PER_CHAPTER };
+  module.exports = { Combat, Run, cardStats, newCard, makeRng, shuffle, pick, STEPS_PER_CHAPTER, makeCase, caseSolutions, casePar };
 }
