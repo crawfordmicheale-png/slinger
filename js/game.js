@@ -122,6 +122,7 @@ class Combat {
     const def = ENEMIES[id];
     let hp = randInt(this.rng, def.hp[0], def.hp[1]);
     if (this.run.ledger >= 1) hp = Math.round(hp * 1.1);
+    if (this.run.lap) hp = Math.round(hp * (1 + 0.25 * this.run.lap)); // the Long Ride gets meaner every lap
     const e = {
       uid: 'e' + (_uid++), id, name: def.name, art: def.art,
       hp, maxHp: hp, block: 0, st: {},
@@ -149,6 +150,7 @@ class Combat {
     }
     e.intent = Object.assign({ key }, def.moves[key]);
     if (e.intent.atk && this.run.ledger >= 2) e.intent.atk = Math.floor(e.intent.atk * 1.1);
+    if (e.intent.atk && this.run.lap) e.intent.atk = Math.floor(e.intent.atk * (1 + 0.15 * this.run.lap));
     if (e.intent.mimic) e.intent.atk = this.lastAttack ? this.lastAttack.dmg : 6;
   }
 
@@ -516,7 +518,7 @@ class Combat {
         const card = pile.splice(Math.floor(this.rng() * pile.length), 1)[0];
         this.collected.push(card);
         this.emit({ type: 'collect', uid: 'player', name: CARDS[card.id].name });
-        this.say(`The Gentleman takes ${CARDS[card.id].name} as payment. It's gone for this fight.`);
+        this.say(`${e.name} takes ${CARDS[card.id].name} as payment. It's gone for this fight.`);
       }
     }
     if (m.tamper) { this.loadRound('dud', m.tamper); this.say(`${e.name} slips ${m.tamper} duds into your iron.`); }
@@ -593,7 +595,9 @@ class Run {
    *   hero   = which hunter (see HEROES)
    *   ledger = difficulty page, 0 to LEDGER.length - 1
    *   styles = unlocked card styles beyond the defaults (e.g. ['brawl', 'seer'])
-   *   mode   = 'story' | 'daily'; daily = the Daily Hunt number; twist = a DAILY_TWISTS id
+   *   mode   = 'story' | 'daily' | 'long' | 'showdown' | 'challenge'
+   *   daily = the Daily Hunt number; twist = a DAILY_TWISTS id
+   *   challenge = a CHALLENGES id; preset = a SHOWDOWN_DECKS id
    */
   constructor(seed, opts = {}) {
     this.rng = makeRng(seed);
@@ -625,8 +629,50 @@ class Run {
     this.twist = DAILY_TWISTS[opts.twist] ? opts.twist : null;
     this.cleanSolves = 0;
     this.tutorial = !!opts.tutorial;
+    this.lap = 0;          // the Long Ride: how many times round the loop
+    this.bounty = 0;       // the Long Ride's score: gold earned from fights
+    this.onlyStyle = null; // a challenge can restrict rewards to one card style
+    this.questionBonus = 0;
+    this.challenge = CHALLENGES[opts.challenge] ? opts.challenge : null;
+    this.preset = SHOWDOWN_DECKS[opts.preset] ? opts.preset : null;
     this.applyTwist();
+    this.applyChallenge();
+    if (this.preset) {
+      this.deck = SHOWDOWN_DECKS[this.preset].deck.map(id => newCard(id));
+      this.belt = SHOWDOWN_DECKS[this.preset].belt.slice();
+      this.hp = this.maxHp += 10; // Showdown riders come in rested
+    }
     this.newMap();
+  }
+
+  /**
+   * Showdown: between fights you heal a third of your health, a wanted demon pays a
+   * tonic, a boss pays its keepsake, and you are offered three cards.
+   */
+  showdownRest(kind, ch) {
+    this.hp = Math.min(this.maxHp, this.hp + Math.floor(this.maxHp * 0.35));
+    const out = { cards: this.cardChoices(3, 0.35) };
+    if (kind === 'elite') { const t = this.randomTonic(); if (this.gainTonic(t)) out.tonic = t; }
+    else {
+      const k = storyFor(this.hero).boss(ch).reward || this.randomKeepsake();
+      if (k && !this.has(k)) { this.gainKeepsake(k); out.keepsake = k; }
+    }
+    return out;
+  }
+
+  /** A Wanted challenge's changed rule, applied at the start of the run. */
+  applyChallenge() {
+    const c = CHALLENGES[this.challenge];
+    if (!c) return;
+    if (c.deck) this.deck = c.deck.map(id => newCard(id));
+    if (c.belt) this.belt = c.belt.slice();
+    if (c.infamy) this.infamy = c.infamy;
+    if (c.sight !== undefined) this.maxSight = this.sight = c.sight;
+    if (c.maxHp) this.hp = this.maxHp = c.maxHp;
+    (c.keepsakes || []).forEach(k => this.gainKeepsake(k));
+    (c.cards || []).forEach(([id, up]) => this.addCard(id, up));
+    if (c.onlyStyle) this.onlyStyle = c.onlyStyle;
+    if (c.questions) this.questionBonus = c.questions;
   }
 
   /** The Daily Hunt's one change to the rules, applied at the start of the run. */
@@ -646,7 +692,7 @@ class Run {
   // ---- saving ---------------------------------------------------------------------
   static SAVE_FIELDS = ['hero', 'ledger', 'styles', 'map', 'path', 'hp', 'maxHp', 'gold', 'sight', 'maxSight', 'deck', 'keepsakes', 'chapter', 'step',
     'usedTowns', 'usedEvents', 'kills', 'innocents', 'flags', 'journal', 'belt', 'removals', 'choices',
-    'tonics', 'infamy', 'mode', 'daily', 'twist', 'cleanSolves', 'tutorial'];
+    'tonics', 'infamy', 'mode', 'daily', 'twist', 'cleanSolves', 'tutorial', 'lap', 'bounty', 'onlyStyle', 'questionBonus', 'challenge', 'preset'];
 
   toJSON() {
     const o = { v: 1 };
@@ -731,7 +777,8 @@ class Run {
         if (t === 'town' && col.filter(o => o.type === 'town').length >= 2) continue;
         col.push({ type: t, next: [] });
       }
-      if (i === 2) col.splice(Math.floor(this.rng() * (col.length + 1)), 0, { type: 'story', next: [] });
+      // The Long Ride has no story stops: the story was told on the first lap.
+      if (i === 2) col.splice(Math.floor(this.rng() * (col.length + 1)), 0, { type: this.mode === 'long' ? 'trail' : 'story', next: [] });
       if (i === L - 2) col.splice(Math.floor(this.rng() * (col.length + 1)), 0, { type: 'camp', next: [] });
       layers.push(col);
     }
@@ -778,6 +825,7 @@ class Run {
       this.chapter++;
       this.step = 0;
       this.usedTowns = [];
+      if (this.chapter > 3 && this.mode === 'long') { this.chapter = 1; this.lap++; }
       if (this.chapter <= 3) this.newMap(); else this.choices = [];
       return;
     }
@@ -845,8 +893,8 @@ class Run {
     return {
       name: this.townName(), folk, enc, scene,
       victim: pick(this.rng, CASE.victims),
-      questions: 5 + HEROES[this.hero].questions + (this.has('lawmans_notebook') ? 2 : 0) - (this.infamy >= 4 ? 1 : 0) - (this.infamy >= 7 ? 1 : 0) - (this.ledger >= 3 ? 1 : 0)
-        + (this.twist === 'blind' ? 1 : 0) - (this.twist === 'tight_lips' ? 2 : 0),
+      questions: Math.max(2, 5 + HEROES[this.hero].questions + (this.has('lawmans_notebook') ? 2 : 0) - (this.infamy >= 4 ? 1 : 0) - (this.infamy >= 7 ? 1 : 0) - (this.ledger >= 3 ? 1 : 0)
+        + (this.twist === 'blind' ? 1 : 0) - (this.twist === 'tight_lips' ? 2 : 0) + (this.questionBonus || 0)),
       usedSight: false,
     };
   }
@@ -859,7 +907,8 @@ class Run {
     while (out.length < n && guard++ < 200) {
       const r = this.rng();
       const rarity = r < 0.08 + rareBoost ? 'rare' : r < 0.42 + rareBoost ? 'uncommon' : 'common';
-      const pool = ids.filter(id => CARDS[id].rarity === rarity && !out.includes(id) && (!CARDS[id].style || this.styles.includes(CARDS[id].style)));
+      const pool = ids.filter(id => CARDS[id].rarity === rarity && !out.includes(id)
+        && (this.onlyStyle ? CARDS[id].style === this.onlyStyle : !CARDS[id].style || this.styles.includes(CARDS[id].style)));
       if (pool.length) out.push(pick(this.rng, pool));
     }
     return out;

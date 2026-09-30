@@ -601,6 +601,48 @@ const STYLE_UNLOCKS = {
 // THE LEDGER — difficulty. Each page adds to the ones before it. Winning on
 // the highest page you have unlocked opens the next.
 // ---------------------------------------------------------------------------
+/** Every wanted demon in a chapter. */
+const elitesOf = ch => [ENCOUNTERS[ch].elite, ENCOUNTERS[ch].elite2].filter(Boolean);
+
+// ---------------------------------------------------------------------------
+// SHOWDOWN — the three bosses and three wanted demons back to back, with a
+// ready-made deck.
+// ---------------------------------------------------------------------------
+const SHOWDOWN_DECKS = {
+  gun: { name: 'Gunslinger', desc: 'Silver in every other chamber and cards that care what fires next.',
+    deck: ['quick_draw', 'quick_draw', 'quick_draw', 'double_tap', 'hammer_back', 'load_silver', 'trick_shot', 'take_cover', 'take_cover', 'take_cover', 'reload', 'speed_loader', 'dead_eye'],
+    belt: ['silver', 'lead', 'silver', 'lead', 'silver', 'lead'] },
+  holy: { name: 'Preacher', desc: 'Stack Hellfire, then cash it in with Exorcism.',
+    deck: ['quick_draw', 'quick_draw', 'holy_water', 'sermon_fire', 'sermon_fire', 'brimstone_verse', 'load_blessed', 'take_cover', 'take_cover', 'take_cover', 'rosary_prayer', 'reload', 'exorcism'],
+    belt: ['hellfire', 'lead', 'blessed', 'lead', 'hellfire', 'lead'] },
+  brawl: { name: 'Brawler', desc: 'Fists, Wrath, and getting hurt on purpose.',
+    deck: ['knuckle_duster', 'knuckle_duster', 'knuckle_duster', 'haymaker', 'chair_leg', 'take_a_punch', 'scar_tissue', 'grim_resolve', 'take_cover', 'take_cover', 'duck_roll', 'bloodied', 'reload'],
+    belt: ['lead', 'lead', 'silver', 'lead', 'lead', 'lead'] },
+  seer: { name: 'Veil-seer', desc: 'Pile on Exposed, then say its true name.',
+    deck: ['quick_draw', 'quick_draw', 'glimpse', 'glimpse', 'tear_veil', 'tear_veil', 'peel_skin', 'third_eye', 'take_cover', 'take_cover', 'reload', 'veil_walk', 'true_name'],
+    belt: ['lead', 'lead', 'silver', 'lead', 'lead', 'lead'] },
+};
+/** The fights, in order: [chapter, 'elite' | 'boss']. */
+const SHOWDOWN_FIGHTS = [[1, 'elite'], [1, 'boss'], [2, 'elite'], [2, 'boss'], [3, 'elite'], [3, 'boss']];
+
+// ---------------------------------------------------------------------------
+// WANTED CHALLENGES — the story with one rule changed. One is featured each week.
+// ---------------------------------------------------------------------------
+const CHALLENGES = {
+  bare_knuckles: { name: 'Bare Knuckles', desc: 'Brawler cards only: your deck starts with fists, and every reward and shop offers only Brawler cards.',
+    deck: ['knuckle_duster', 'knuckle_duster', 'knuckle_duster', 'pistol_whip', 'pistol_whip', 'take_cover', 'take_cover', 'take_cover', 'take_cover', 'haymaker', 'reload'], onlyStyle: 'brawl' },
+  tampered_iron: { name: 'Tampered Iron', desc: 'Somebody got to your gun belt: every chamber is a Dud except one Blessed round. Buy better rounds, or learn to punch.',
+    belt: ['blessed', 'dud', 'dud', 'dud', 'dud', 'dud'] },
+  wanted_man: { name: 'Wanted Man', desc: 'Your Infamy starts at 6. Prices are up, towns talk less, and posses are already riding.',
+    infamy: 6 },
+  blind_justice: { name: 'Blind Justice', desc: 'No Veil Sight at all, and one question fewer in every town. Pure detective work.',
+    sight: 0, questions: -1 },
+  glass_cannon: { name: 'Glass Cannon', desc: 'Only 40 max HP, but you start with Cinder War Paint and an upgraded Iron Will.',
+    maxHp: 40, keepsakes: ['war_paint'], cards: [['iron_will', true]] },
+  second_sight: { name: 'Second Sight', desc: 'Veil-seer cards only, and six Veil Sight to see with.',
+    deck: ['quick_draw', 'quick_draw', 'quick_draw', 'glimpse', 'glimpse', 'tear_veil', 'take_cover', 'take_cover', 'take_cover', 'third_eye', 'reload'], onlyStyle: 'seer', sight: 6 },
+};
+
 // ---------------------------------------------------------------------------
 // THE DAILY HUNT — one seeded run a day, the same for everyone, with one twist.
 // ---------------------------------------------------------------------------
@@ -722,6 +764,26 @@ const ENEMIES = {
     },
   },
 
+  dowser: {
+    name: 'The Dowser', hp: [36, 40], art: 'veil',
+    moves: {
+      rod:   { n: 'Divining Rod', atk: 8 },
+      drought: { n: 'Dry Spell', shaken: 1, exposed: 1, block: 6 },
+      drown: { n: 'Drown', atk: 5, hits: 2 },
+    },
+    pattern: ['rod', 'drought', 'drown'],
+  },
+  bone_wagon: {
+    name: 'The Bone Wagon', hp: [78, 82], art: 'coffin', elite: true,
+    moves: {
+      run:    { n: 'Run You Down', atk: 17 },
+      toll:   { n: 'Toll the Bell', atk: 5, shaken: 2, exposed: 1 },
+      whip:   { n: "Driver's Whip", atk: 4, hits: 3 },
+      load:   { n: 'Load the Dead', block: 12, wrath: 2 },
+    },
+    pattern: ['toll', 'run', 'whip', 'load', 'run'],
+  },
+
   // Chapter 2 ---------------------------------------------------------------
   measurer: {
     name: 'The Measurer', hp: [58, 62], art: 'coffin', ward: 2,
@@ -789,6 +851,25 @@ const ENEMIES = {
     },
   },
 
+  pale_clerk: {
+    name: 'The Pale Clerk', hp: [50, 54], art: 'grey', ward: 1,
+    moves: {
+      audit:     { n: 'Audit', atk: 5, collect: 1 },
+      foreclose: { n: 'Foreclose', atk: 14 },
+      interest:  { n: 'Compound Interest', wrath: 2, block: 8 },
+    },
+    pattern: ['audit', 'foreclose', 'interest'],
+  },
+  dust_devil: {
+    name: 'The Dust Devil', hp: [100, 104], art: 'veil', elite: true, veiled: true,
+    moves: {
+      blast: { n: 'Sandblast', atk: 3, hits: 5 },
+      whirl: { n: 'Whirl', block: 12, wrath: 2 },
+      blind: { n: 'Blinding Grit', shaken: 2, exposed: 2, atk: 6 },
+    },
+    pattern: ['blast', 'blind', 'whirl', 'blast'],
+  },
+
   // Chapter 3 ---------------------------------------------------------------
   hanging_judge: {
     name: 'The Hanging Judge', hp: [82, 86], art: 'noose',
@@ -841,6 +922,25 @@ const ENEMIES = {
     },
     pattern: ['warrant', 'six', 'deputize'],
   },
+  mesmerist: {
+    name: 'The Mesmerist', hp: [74, 78], art: 'veil', veiled: true,
+    moves: {
+      seance: { n: 'Séance', curse: { id: 'bad_hand', n: 1 }, shaken: 2 },
+      hands:  { n: 'Spirit Hands', atk: 6, hits: 3 },
+      ecto:   { n: 'Ectoplasm', block: 14, heal: 8 },
+    },
+    pattern: ['seance', 'hands', 'ecto', 'hands'],
+  },
+  starving_man: {
+    name: 'The Starving Man', hp: [136, 140], art: 'rider', elite: true,
+    moves: {
+      devour: { n: 'Devour', atk: 20, heal: 10 },
+      gnaw:   { n: 'Gnaw', atk: 7, hits: 2 },
+      hunger: { n: 'The Hunger', wrath: 3, block: 10 },
+      frost:  { n: 'Winter Breath', exposed: 2, shaken: 1, atk: 8 },
+    },
+    pattern: ['frost', 'devour', 'gnaw', 'hunger', 'devour'],
+  },
   grey_gentleman: {
     name: 'The Gentleman in Grey', hp: [180, 180], art: 'grey', boss: true,
     moves: {
@@ -870,8 +970,10 @@ const ENCOUNTERS = {
       { foes: ['mourner'], role: 'widow in black', g: 'f', tells: ['Mourns a husband nobody in town remembers.', 'Her veil breathes when she does not.'] },
       { foes: ['hollow_deputy'], role: 'deputy', tells: ['Wears a star with no name on it.', 'Stands too still. Like a scarecrow with a gun.'] },
       { foes: ['cinder_hound', 'cinder_hound'], role: 'stable hand', tells: ['The horses have kicked their stalls to splinters.', 'Two dogs follow him. Their eyes glow like cigar ends.'] },
+      { foes: ['dowser'], role: 'water witch', g: 'f', tells: ['Every well she has witched for has run dry within the month.', 'Her divining rod points at you, and only at you.'] },
     ],
     elite: { foes: ['skinless_rider'], name: 'The Skinless Rider', bounty: 'Rode through Dry Hollow at midnight. Left eleven dead, and every one of them smiling.' },
+    elite2: { foes: ['bone_wagon'], name: 'The Bone Wagon', bounty: 'An undertaker\'s wagon that drives itself. It stops outside a house, and by morning somebody inside is ready for it.' },
     boss: {
       foes: ['hollow_steer'], guise: 'Silas Pike, Cattle Baron', kin: 'amos', reward: 'amos_harmonica',
       before: 'Silas Pike owns every cow and most of the men in Dry Hollow. Two years back, your brother Amos found out what Pike fed his herd. They found Amos in the stockyard. What was left of him.',
@@ -886,7 +988,9 @@ const ENCOUNTERS = {
       { foes: ['card_devil'], role: 'faro dealer', tells: ['Has never lost a hand. Not once.', 'The cards in his deck are all the same card.'] },
       { foes: ['chalk_wraith'], role: 'schoolmarm', g: 'f', tells: ['The children recite lessons in a language that makes your teeth hurt.', 'Her chalk writes by itself.'] },
       { foes: ['jackal', 'jackal'], role: 'pair of drifters', plural: true, tells: ['Two brothers who laugh at the same moment, every time.', 'They have been "just passing through" for six years.'] },
+      { foes: ['pale_clerk'], role: 'bank teller', tells: ['Knows the balance of every account in town. Including yours.', 'Never blinks behind those spectacles. The ink on his fingers is still wet.'] },
     ],
+    elite2: { foes: ['dust_devil'], name: 'The Dust Devil', bounty: 'A whirlwind that walks against the wind. It has taken two stagecoaches and a church steeple.' },
     elite: { foes: ['mother_tallow'], name: 'Mother Tallow', bounty: 'Candle-maker. Sells tapers that burn with no smoke and no light. Folks who buy them stop waking up.' },
     boss: {
       foes: ['silk_widow'], guise: 'Madame Odile of the Gilded Lily', kin: 'ruth', reward: 'ruths_rosary',
@@ -902,7 +1006,9 @@ const ENCOUNTERS = {
       { foes: ['false_shepherd'], role: 'traveling missionary', tells: ['His congregation never blinks during the sermon.', 'The cross on his chapel hangs upside down when nobody looks.'] },
       { foes: ['iron_horror'], role: 'railroad surveyor', tells: ['Lays track that leads nowhere.', 'Smells of coal smoke and cooked meat.'] },
       { foes: ['crow', 'crow', 'crow'], role: 'three sisters', plural: true, g: 'f', tells: ['Three old women who finish each other\'s sentences.', 'Birds fall silent when they pass.'] },
+      { foes: ['mesmerist'], role: 'spirit medium', g: 'f', tells: ['Her séances always reach the right ghost. The ghosts always ask for you.', 'The candles lean toward her when she speaks.'] },
     ],
+    elite2: { foes: ['starving_man'], name: 'The Starving Man', bounty: 'A trapper who came down from the high passes after the worst winter in memory. His whole party came down with him, in his belly.' },
     elite: { foes: ['brimstone_marshal'], name: 'The Brimstone Marshal', bounty: 'Wears a star just like the one you used to. Serves warrants for the other side.' },
     boss: {
       foes: ['grey_gentleman'], guise: 'The Gentleman in Grey', kin: 'clara', reward: null,
@@ -1069,6 +1175,46 @@ const EVENTS = [
       { label: 'Let him work on it. (Upgrade a card)', run: (r, api) => { api.upgradeCardPrompt(); return 'He hands it back without a word. It sits in your hand like it grew there.'; } },
       { label: 'Buy a box of special rounds. (40 gold, gain Hellfire Round)', req: r => r.gold >= 40, run: (r, api) => { r.gold -= 40; api.gainCard('hellfire_round'); return 'The cartridges are warm to the touch and smell like Sunday.'; } },
       { label: 'Nod and move along.', run: () => 'Wen nods back.' },
+    ],
+  },
+  {
+    id: 'stagecoach',
+    title: 'The Overturned Stagecoach',
+    text: 'A stagecoach on its side in a dry wash, wheels still turning. No horses, no passengers. The strongbox is chained to the seat, and it is heavy.',
+    options: [
+      { label: 'Break it open. (Gain 60 gold, more Infamy)', run: r => { r.gold += 60; r.addInfamy(2); return 'Sixty dollars in Wells Fargo scrip. Somebody will come looking for it, and they will know your face. (+60 gold, +2 Infamy)'; } },
+      { label: 'Haul it to the next town. (Less Infamy, gain a tonic)', run: r => { r.addInfamy(-2); const t = r.randomTonic(); const got = r.gainTonic(t); return `The express agent nearly weeps. He gives you a reward from the company stores${got ? `: ${TONICS[t].name}` : ', but your satchel is full'}. Word gets around. (-2 Infamy)`; } },
+      { label: 'Look through the Veil at the wreck. (1 Sight)', req: r => r.sight > 0, run: (r, api) => { r.sight--; api.gainCard('pierce_veil'); return 'The passengers are still inside, just on the other side of the Veil, sitting politely and waiting for a stop that will never come. You tell them they can get off now. They thank you. (Gain Pierce the Veil.)'; } },
+    ],
+  },
+  {
+    id: 'ghost_town',
+    title: 'A Town With No Name',
+    text: 'The sign has weathered blank. Every door hangs open. In the saloon, a player piano is working through "Camptown Races" for nobody at all.',
+    options: [
+      { label: 'Search the general store. (Gain a tonic)', run: r => { const t = r.randomTonic(); return r.gainTonic(t) ? `Behind the counter, under an inch of dust: ${TONICS[t].name}. You leave a dollar on the counter out of habit.` : 'You find a tonic, but your satchel is full.'; } },
+      { label: 'Sit at the bar and let the piano finish. (Heal 12, remove a card)', run: (r, api) => { r.hp = Math.min(r.maxHp, r.hp + 12); api.removeCardPrompt(); return 'When the song ends, the piano plays one more bar, slowly, like a question. You find you have let go of something. (Heal 12. Remove a card.)'; } },
+      { label: 'Ride through without stopping.', run: () => 'The piano stops the moment you pass the town limits.' },
+    ],
+  },
+  {
+    id: 'prospector',
+    title: 'The Old Prospector',
+    text: 'A prospector with one tooth and one mule is panning a creek that has never held gold. "Found me some silver, though," he says, and shows you a lump of ore as big as a fist. "Real silver. The kind that burns them."',
+    options: [
+      { label: 'Buy it and have a round cast. (35 gold, Silver in your belt)', req: r => r.gold >= 35, run: r => { r.gold -= 35; const i = r.belt.indexOf('lead'); if (i >= 0) r.belt[i] = 'silver'; return i >= 0 ? `He watches you pour it by the campfire. The round comes out bright as a dime. (A Lead chamber in your gun belt is now Silver.)` : 'You have no Lead chambers left to fill. He keeps the money anyway.'; } },
+      { label: 'Help him dig. (Lose 8 HP, gain 40 gold)', run: r => { r.hp = Math.max(1, r.hp - 8); r.gold += 40; return 'The creek bank gives way and you spend an hour in cold water, but the old man was right about one thing: there is a second lump. He splits it fair. (Lose 8 HP. Gain 40 gold.)'; } },
+      { label: 'Wish him luck.', run: () => '"Don\'t need luck," he says. "Need a bigger pan."' },
+    ],
+  },
+  {
+    id: 'duel',
+    title: 'A Duel at Noon',
+    text: 'A kid with two pearl-handled pistols and no beard steps into the street. "You\'re the demon hunter. I\'m faster than you." Half the town is watching from the boardwalk.',
+    options: [
+      { label: 'Accept the duel. (Lose 6 HP, upgrade a card)', run: (r, api) => { r.hp = Math.max(1, r.hp - 6); api.upgradeCardPrompt(); return 'He is fast. You are faster, just barely, and you shoot the pistol out of his hand instead of his heart. He grazes your arm on the way down. He asks you to teach him. You teach him one thing. (Lose 6 HP. Upgrade a card.)'; } },
+      { label: 'Look through the Veil at him first. (1 Sight)', req: r => r.sight > 0, run: (r, api) => { r.sight--; api.gainCard('warning_shot'); r.addInfamy(-1); return 'Just a boy. Human, scared, and trying hard not to show it. You put a warning shot through his hat. He goes home. The town decides you are a decent sort. (Gain Warning Shot. -1 Infamy.)'; } },
+      { label: 'Walk away.', run: r => { r.addInfamy(1); return 'The kid crows about it in every saloon from here to Coldwater. (+1 Infamy)'; } },
     ],
   },
 ];
@@ -1471,5 +1617,5 @@ function storyFor(hero) {
 
 // Make available to Node (tests) as well as the browser.
 if (typeof module !== 'undefined') {
-  module.exports = { DAILY_TWISTS, CHAR_STORY, storyFor, HEROES, STYLE_UNLOCKS, LEDGER, cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
+  module.exports = { elitesOf, SHOWDOWN_DECKS, SHOWDOWN_FIGHTS, CHALLENGES, DAILY_TWISTS, CHAR_STORY, storyFor, HEROES, STYLE_UNLOCKS, LEDGER, cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, ROUNDS, SPECIAL_ROUNDS, STARTING_BELT, CASE, HERO, FAMILY, STATUS, CARDS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK, EVENTS, STORY, CHAPTER_INTROS, STORY_EVENTS, FINALE, ENDINGS, MEMORIES, THANKS };
 }

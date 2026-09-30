@@ -4,7 +4,7 @@
 const assert = require('assert');
 const D = require('../js/data.js');
 Object.assign(globalThis, D);
-const { Combat, Run, cardStats, STEPS_PER_CHAPTER, makeCase, caseSolutions, makeRng } = require('../js/game.js');
+const { Combat, Run, cardStats, STEPS_PER_CHAPTER, makeCase, caseSolutions, makeRng, pick } = require('../js/game.js');
 
 function botTurn(c) {
   let guard = 0;
@@ -59,7 +59,7 @@ function playRun(seed, opts = { styles: ['brawl', 'seer'] }) {
     removeCardPrompt: () => run.removeCard(run.deck[0].uid),
     upgradeCardPrompt: () => { const u = run.upgradable(); if (u.length) run.upgradeCard(u[0].uid); },
   };
-  while (run.chapter <= 3) {
+  while (run.chapter <= 3 && run.lap < (opts.maxLaps || 1)) {
     assert(run.choices.length > 0);
     const ch = run.choices[Math.floor(run.rng() * run.choices.length)];
     let won = true;
@@ -68,9 +68,9 @@ function playRun(seed, opts = { styles: ['brawl', 'seer'] }) {
       assert.strictEqual(town.folk.filter(f => f.demon).length, 1);
       const drop = run.sight > 0; if (drop) run.sight--;
       won = fight(run, town.enc.foes, { drop });
-      if (won) { run.afterFight(); run.gold += run.goldReward('normal'); run.gainTonic(run.tonicReward('normal')); pickReward(run, run.cardChoices(3)); }
+      if (won) { run.afterFight(); const g = run.goldReward('normal'); run.gold += g; run.bounty += g; run.gainTonic(run.tonicReward('normal')); pickReward(run, run.cardChoices(3)); }
     } else if (ch.type === 'wanted') {
-      won = fight(run, ENCOUNTERS[run.chapter].elite.foes, {});
+      won = fight(run, elitesOf(run.chapter)[Math.floor(run.rng() * elitesOf(run.chapter).length)].foes, {});
       if (won) { run.afterFight(); run.gainKeepsake(run.randomKeepsake()); run.gainTonic(run.tonicReward('elite')); pickReward(run, run.cardChoices(3, 0.1)); }
     } else if (ch.type === 'boss') {
       const b = storyFor(run.hero).boss(run.chapter);
@@ -97,10 +97,10 @@ function playRun(seed, opts = { styles: ['brawl', 'seer'] }) {
       assert(typeof txt === 'string');
     }
     assert(run.hp <= run.maxHp, 'hp above max');
-    if (!won) return { win: false, chapter: run.chapter, step: run.step };
+    if (!won) return { win: false, chapter: run.chapter, step: run.step, lap: run.lap, bounty: run.bounty };
     run.advance(ch.idx);
   }
-  return { win: true, chapter: 4 };
+  return { win: true, chapter: 4, lap: run.lap, bounty: run.bounty };
 }
 
 // Every town must be solvable from the clues alone: assuming humans tell the
@@ -166,6 +166,59 @@ function suspects(town) {
     line.push(`${tw} ${Math.round(100 * w / 30)}%`);
   }
   console.log('daily twists (bot win rate): ' + line.join(', '));
+}
+
+// The Long Ride: laps loop back to chapter one and keep getting harder.
+{
+  const res = [];
+  for (let i = 0; i < 40; i++) res.push(playRun(2000 + i, { hero: Object.keys(HEROES)[i % 3], styles: ['brawl', 'seer'], mode: 'long', maxLaps: 4 }));
+  assert(res.every(r => r.lap >= 0 && r.bounty >= 0));
+  const laps = res.map(r => r.lap + 1);
+  console.log(`long ride: 40 rides, laps reached avg ${(laps.reduce((a, b) => a + b) / 40).toFixed(2)}, max ${Math.max(...laps)}, avg bounty ${Math.round(res.reduce((a, r) => a + r.bounty, 0) / 40)}`);
+}
+
+// Showdown: six fights back to back with each ready-made deck.
+{
+  const line = [];
+  for (const preset of Object.keys(SHOWDOWN_DECKS)) {
+    let wins = 0, turns = 0;
+    for (let i = 0; i < 30; i++) {
+      const run = new Run(3000 + i, { hero: Object.keys(HEROES)[i % 3], preset, mode: 'showdown', styles: ['brawl', 'seer'] });
+      let ok = true, t = 0;
+      for (const [ch, kind] of SHOWDOWN_FIGHTS) {
+        run.chapter = ch;
+        const foes = kind === 'boss' ? storyFor(run.hero).boss(ch).foes : pick(run.rng, elitesOf(ch)).foes;
+        const c = new Combat(run, foes, {});
+        let guard = 0;
+        while (!c.over && guard++ < 200) botTurn(c);
+        c.finish();
+        t += c.turn;
+        if (c.over !== 'win') { ok = false; break; }
+        pickReward(run, run.showdownRest(kind, ch).cards);
+      }
+      if (ok) { wins++; turns += t; }
+    }
+    line.push(`${preset} ${Math.round(100 * wins / 30)}%${wins ? ` (${Math.round(turns / wins)} turns)` : ''}`);
+  }
+  console.log('showdown (bot win rate): ' + line.join(', '));
+}
+
+// Wanted challenges: each rule applies and the run plays through.
+{
+  const line = [];
+  for (const id of Object.keys(CHALLENGES)) {
+    const probe = new Run(1, { challenge: id });
+    const c = CHALLENGES[id];
+    if (c.onlyStyle) assert(probe.cardChoices(3).every(k => CARDS[k].style === c.onlyStyle), id + ': rewards must match the style');
+    if (c.belt) assert.deepStrictEqual(probe.belt, c.belt);
+    if (c.maxHp) assert.strictEqual(probe.maxHp, c.maxHp);
+    if (c.infamy) assert.strictEqual(probe.infamy, c.infamy);
+    assert(probe.makeTown().questions >= 2);
+    let w = 0;
+    for (let i = 0; i < 20; i++) if (playRun(4000 + i, { hero: Object.keys(HEROES)[i % 3], challenge: id, mode: 'challenge' }).win) w++;
+    line.push(`${id} ${Math.round(100 * w / 20)}%`);
+  }
+  console.log('challenges (bot win rate): ' + line.join(', '));
 }
 
 const N = +process.argv[2] || 300;

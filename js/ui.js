@@ -103,7 +103,7 @@ function renderHUD() {
       <span class="hud-infamy inf-${r.infamy >= 7 ? 3 : r.infamy >= 4 ? 2 : r.infamy >= 1 ? 1 : 0}" data-tip="${esc(INFAMY.desc(r.infamy))}">${INFAMY.label(r.infamy)} ${r.infamy}</span>
       <span class="hud-tonics" data-tip="${esc(r.tonics.length ? 'Tonics: ' + r.tonics.map(t => TONICS[t].name).join(', ') + '. Use them during a fight.' : 'No tonics in your satchel.')}">${tonicIcons(r.tonics, false)}</span>
     </div>
-    <div class="hud-mid">${r.chapter <= 3 ? CHAPTERS[r.chapter].title : ''}</div>
+    <div class="hud-mid">${r.mode === 'showdown' && S.sd ? `Showdown · Fight ${Math.min(S.sd.idx + 1, SHOWDOWN_FIGHTS.length)} of ${SHOWDOWN_FIGHTS.length}` : r.chapter <= 3 ? CHAPTERS[r.chapter].title : ''}${r.mode === 'long' ? ` · Lap ${r.lap + 1} · Bounty ${r.bounty}` : ''}</div>
     <div class="hud-right">
       <span class="keepsakes">${r.keepsakes.map(keepsakeHTML).join('')}</span>
       <button class="btn small" data-act="journal">Journal (${r.journal.length})</button>
@@ -219,9 +219,15 @@ const SCREENS = {
         <button class="btn ${loadSave() ? '' : 'big'}" data-act="setup">${loadSave() ? 'New Hunt' : 'Ride Out'}</button>
         <div class="menu-row">
           <button class="btn" data-act="daily">Daily Hunt<br><small>#${dailyInfo().num} · ${esc(DAILY_TWISTS[dailyInfo().twist].name)}</small></button>
-          <button class="btn" data-act="casebook">The Casebook<br><small>Pure detective work</small></button>
+          <button class="btn" data-act="longride">The Long Ride<br><small>Endless. Ride for bounty.</small></button>
         </div>
         <div class="menu-row">
+          <button class="btn" data-act="casebook">The Casebook<br><small>Pure detective work</small></button>
+          <button class="btn" data-act="showdown">Showdown<br><small>Six bosses, back to back</small></button>
+          <button class="btn" data-act="challenges">Wanted<br><small>This week: ${esc(CHALLENGES[featuredChallenge()].name)}</small></button>
+        </div>
+        <div class="menu-row">
+          <button class="btn" data-act="boards">Leaderboards</button>
           <button class="btn" data-act="records">Records</button>
           <button class="btn" data-act="how">How to Play</button>
           <button class="btn" data-act="settings">Settings</button>
@@ -337,7 +343,7 @@ const SCREENS = {
   },
 
   wanted: () => {
-    const e = ENCOUNTERS[S.run.chapter].elite;
+    const e = S.elite || ENCOUNTERS[S.run.chapter].elite;
     return `
       <section class="poster">
         <div class="poster-head">WANTED</div>
@@ -528,7 +534,8 @@ const SCREENS = {
         <p>${esc(b.after)}</p>
         ${got ? `<p class="loot-line keepsake-line">${keepsakeHTML(got)} <b>${esc(KEEPSAKES[got].name)}</b> — ${esc(KEEPSAKES[got].desc)}</p>` : ''}
         <p class="sub">You rest for three days. Your wounds close. (Health fully restored.)</p>
-        <button class="btn big" data-act="next-chapter">Ride for ${esc(CHAPTERS[S.run.chapter + 1].title.split('— ')[1])}</button>
+        ${S.run.mode === 'long' && S.run.chapter === 3 ? `<p class="loot-note">The ledger rewrites itself, and the Gentleman's name is back on the first page. Lap ${S.run.lap + 2} begins, and every demon on it is tougher. Bounty so far: ${S.run.bounty}.</p>` : ''}
+        <button class="btn big" data-act="next-chapter">${S.run.chapter < 3 ? 'Ride for ' + esc(CHAPTERS[S.run.chapter + 1].title.split('— ')[1]) : 'Ride the next lap'}</button>
       </section>`;
   },
 
@@ -583,7 +590,7 @@ const SCREENS = {
       <h2>Here lies ${esc(heroDef().name)}</h2>
       <p>${esc(STORY.death)}</p>
       <p class="stats">${esc(CHAPTERS[Math.min(3, S.run.chapter)].title)} · Demons sent back: ${S.run.kills}</p>
-      ${S.run.mode === 'daily' ? dailyShareHTML() : '<button class="btn big" data-act="new-run">Ride again</button>'}
+      ${modeEndHTML()}
       <button class="btn" data-act="title">Title</button>
     </section>`,
 };
@@ -632,7 +639,7 @@ function pickNode(i) {
       S.cleanSolve = false;
       setScreen('town');
       break;
-    case 'wanted': setScreen('wanted'); break;
+    case 'wanted': S.elite = pick(r.rng, elitesOf(r.chapter)); setScreen('wanted'); break;
     case 'camp':
       r.sight = r.maxSight;
       S.memory = pick(r.rng, ST().memories);
@@ -713,11 +720,11 @@ function unlock(key) {
   return UNLOCK_NAMES[key];
 }
 function unlockAfterBoss(ch) {
-  if (S.run && S.run.mode === 'daily') return;
+  if (S.run && (S.run.mode === 'daily' || S.run.mode === 'showdown')) return;
   if (ch === 1) unlock('brawl'); if (ch === 2) unlock('seer');
 }
 function unlockAfterWin(run) {
-  if (run.mode === 'daily') return '';
+  if (run.mode !== 'story') return '';
   const got = [];
   const m = unlock('martha'); if (m) got.push(m);
   const p = loadProfile();
@@ -736,7 +743,7 @@ function toast(text) {
 }
 // The Daily Hunt keeps its own save slot, so it never overwrites a story run.
 const DAILY_SAVE_KEY = 'slinger.daily.v1';
-const saveKey = mode => (mode === 'daily' ? DAILY_SAVE_KEY : SAVE_KEY);
+const saveKey = mode => ({ daily: DAILY_SAVE_KEY, long: 'slinger.long.v1', challenge: 'slinger.challenge.v1' }[mode] || SAVE_KEY);
 function saveRun() { try { if (S.run) localStorage.setItem(saveKey(S.run.mode), JSON.stringify(S.run)); } catch (e) { /* storage unavailable */ } }
 function clearSave(mode = 'story') { try { localStorage.removeItem(saveKey(mode)); } catch (e) { /* storage unavailable */ } }
 function loadSave(mode = 'story') {
@@ -795,6 +802,7 @@ function winFight() {
   const c = S.combat;
   c.finish();
   r.afterFight();
+  if (r.mode === 'showdown') { showdownWon(c); return; }
   const kind = S.fightKind;
   let gold = r.goldReward(kind);
   const clean = kind === 'normal' && S.cleanSolve;
@@ -803,6 +811,7 @@ function winFight() {
   const freed = c.freed; // hostages pay you back
   if (freed) { gold += 15 * freed; r.addInfamy(-freed); }
   r.gold += gold;
+  r.bounty = (r.bounty || 0) + gold;
   let keepsake = null;
   if (kind === 'elite') { keepsake = r.randomKeepsake(); r.gainKeepsake(keepsake); }
   const found = r.tonicReward(kind);
@@ -817,7 +826,7 @@ function winFight() {
   }
   AUDIO.sfx('coin', 0.3);
   if (kind === 'boss') r.addJournal(ST().boss(r.chapter).rest || ST().boss(r.chapter).guise, ST().boss(r.chapter).after);
-  if (kind === 'boss' && r.chapter === 3) { setScreen('finale'); return; }
+  if (kind === 'boss' && r.chapter === 3 && r.mode !== 'long') { setScreen('finale'); return; }
   S.reward = {
     title: kind === 'boss' ? 'Vengeance' : kind === 'elite' ? 'Bounty Collected' : 'Back Through the Veil',
     clean,
@@ -1203,7 +1212,7 @@ function howToPlay() {
       <p><b>Grit</b> pays for cards and refills every turn. Shot cards (the ones with bullet pips) spend rounds, and rounds do <i>not</i> refill on their own. Play <b>Reload</b>.</p>
       <p><b>Cover</b> absorbs damage and fades at the start of your turn. Watch the icons over each demon: they show what it will do next.</p>
       <p><b>Wrath</b> adds damage to every hit. <b>Exposed</b> takes 50% more damage. <b>Shaken</b> deals 25% less. <b>Hellfire</b> burns every turn.</p>
-      <p><b>Other ways to ride.</b> The <b>Daily Hunt</b> is one run a day, the same for everyone, with a fixed hunter and one twist; share your result line when it's done. <b>The Casebook</b> is detective work only: three cases, two demons in each, scored against par. <b>Settings</b> has fast animations, bigger text and voice autoplay.</p>
+      <p><b>Other ways to ride.</b> The <b>Daily Hunt</b> is one run a day, the same for everyone, with a fixed hunter and one twist; share your result line when it's done. <b>The Long Ride</b> never ends: the chapters loop, the demons get tougher each lap, and you ride for bounty. <b>Showdown</b> is six bosses and wanted demons back to back with a ready-made deck, scored on turns. <b>Wanted</b> posters change one rule of the story, with a new one featured every week. <b>The Casebook</b> is detective work only: three cases, two demons in each, scored against par. <b>Leaderboards</b> are shared by everyone who plays the published page. <b>Settings</b> has fast animations, bigger text and voice autoplay.</p>
       <p class="sub">Keys: 1–9 play a card, E ends your turn, Esc cancels.</p>
     </div>
     <div class="row center"><button class="btn" data-act="close-modal">Got it</button></div>`);
@@ -1308,7 +1317,7 @@ const ACTIONS = {
     }
   },
   'leave-town': () => { S.cleanSolve = false; recordTown(false); S.run.addInfamy(1); startFight(S.town.enc.foes, 'normal', { ambushed: true }); },
-  'fight-elite': () => startFight(ENCOUNTERS[S.run.chapter].elite.foes, 'elite'),
+  'fight-elite': () => startFight((S.elite || ENCOUNTERS[S.run.chapter].elite).foes, 'elite'),
   'fight-boss': () => startFight(ST().boss(S.run.chapter).foes, 'boss'),
 
   // combat
@@ -1347,7 +1356,12 @@ const ACTIONS = {
       setScreen('chapterEnd');
     } else leaveNode();
   },
-  'next-chapter': () => { S.run.advance(S.nodeIdx); S.run.sight = S.run.maxSight; showChapterIntro(); },
+  'next-chapter': () => {
+    S.run.advance(S.nodeIdx); S.run.sight = S.run.maxSight;
+    // The Long Ride skips the letters: the story was told the first time round.
+    if (S.run.mode === 'long') { if (S.run.chapter === 1) toast(`Lap ${S.run.lap + 1}. The demons remember you.`); setScreen('map'); }
+    else showChapterIntro();
+  },
 
   // camp
   'rest': () => {
@@ -1440,7 +1454,7 @@ const ACTIONS = {
     if (o.req && !o.req(S.run)) return;
     S.eventResult = o.run(S.run, eventApi());
     S.run.hp = Math.min(S.run.hp, S.run.maxHp);
-    if (S.run.flags.confessed && S.run.mode !== 'daily') unlock('agnes');
+    if (S.run.flags.confessed && S.run.mode === 'story') unlock('agnes');
     render();
   },
 };
