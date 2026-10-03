@@ -131,6 +131,14 @@ const HEROES = {
     blurb: 'The Coldwater nun Ruth confided in. Frail, but she sees clearly (4 Veil Sight) and her Hellfire burns hotter. Blessed rounds in her belt.',
     unlock: { key: 'agnes', text: 'Tell Sister Agnes the truth.' },
   },
+  toby: {
+    name: 'Toby Lark', title: 'Kid', art: 'toby', hp: 62, sight: 3, questions: 1, dog: 2,
+    deck: ['quick_draw', 'quick_draw', 'quick_draw', 'sic_em', 'sic_em', 'bear_trap', 'take_cover', 'take_cover', 'take_cover', 'take_cover', 'reload'],
+    keepsakes: ['rangers_collar', 'elk_knife'],
+    belt: ['lead', 'lead', 'silver', 'lead', 'lead', 'lead'], tonics: ['coffee'],
+    blurb: 'The stockyard boy Amos Crane looked out for, ten years grown. Ranger, his dog, bites the weakest demon after every one of your turns, and his traps go off when demons attack. Tracker cards.',
+    unlock: { key: 'toby', text: 'As Jonah, give the stockyard boy in Dry Hollow the money Amos would have.' },
+  },
 };
 
 // Card styles that start locked, and what unlocks them.
@@ -234,6 +242,8 @@ const KEEPSAKES = {
   war_paint: { name: 'Cinder War Paint', desc: 'Start each fight with 1 Wrath.' },
   eli_ring: { name: "Eli's Wedding Band", desc: 'Your Buckshot rounds splash 5 damage instead of 3.', hero: true },
   psalter: { name: "Agnes's Psalter", desc: 'Whenever you apply Hellfire to a demon, apply 1 more.', hero: true },
+  rangers_collar: { name: "Ranger's Collar", desc: 'A red bandana gone pink with washing. Ranger bites 1 harder.', hero: true },
+  elk_knife: { name: "Amos's Pocketknife", desc: 'Elk-horn handle. On your first turn of every fight, your first shot deals 4 extra damage.', hero: true },
   lawmans_notebook: { name: "Lawman's Notebook", desc: 'Ask 2 extra questions in every town. Your old handwriting, from when you still did things by the book.' },
 };
 const KEEPSAKE_POOL = ['snake_oil', 'silver_spurs', 'gun_oil', 'rattle', 'bible', 'horseshoe', 'war_paint', 'lawmans_notebook'];
@@ -500,6 +510,76 @@ const ENEMIES = {
       wrath: 2,
     },
   },
+
+  // Chapter 4: the Far Side -------------------------------------------------
+  ferryman: {
+    name: 'The Ferryman', hp: [92, 98], art: 'hat',
+    moves: {
+      fare: { n: 'Take the Fare', atk: 10, collect: 1 },
+      oar:  { n: 'Oar', atk: 7, hits: 2 },
+      mist: { n: 'River Mist', block: 16, exposed: 1 },
+    },
+    pattern: ['fare', 'oar', 'mist'],
+  },
+  bride_grey: {
+    name: 'The Bride in Grey', hp: [84, 90], art: 'veil', veiled: true,
+    moves: {
+      vow:     { n: 'Till Death', atk: 18 },
+      bouquet: { n: 'Toss the Bouquet', shaken: 2, burn: 4 },
+      weep:    { n: 'Weep', block: 14, heal: 10 },
+    },
+    pattern: ['bouquet', 'vow', 'weep', 'vow'],
+  },
+  hangman_shade: {
+    name: "The Hangman's Shade", hp: [100, 106], art: 'noose',
+    hostage: { name: 'a lost soul on the end of his rope', threshold: 18 },
+    moves: {
+      measure: { n: 'Take Your Measure', wrath: 2, block: 12 },
+      knot:    { n: 'Tie the Knot', atk: 8, shaken: 2 },
+      drop:    { n: 'The Drop', atk: 22 },
+    },
+    pattern: ['measure', 'knot', 'drop'],
+  },
+  lost_soul: {
+    name: 'Lost Soul', hp: [16, 19], art: 'veil', minion: true,
+    moves: { grasp: { n: 'Grasp', atk: 7 }, moan: { n: 'Moan', shaken: 1, block: 5 } },
+    pattern: ['grasp', 'moan'], start: 'random',
+  },
+  tallyman: {
+    name: 'The Tallyman', hp: [170, 176], art: 'grey', elite: true,
+    moves: {
+      audit:    { n: 'Audit', atk: 6, collect: 1, exposed: 2 },
+      interest: { n: 'Interest', atk: 6, hits: 3 },
+      tally:    { n: 'Tally the Sins', wrath: 3, block: 14 },
+      settle:   { n: 'Settle Up', atk: 20 },
+    },
+    pattern: ['audit', 'interest', 'tally', 'settle'],
+  },
+  choir: {
+    name: 'The Choir Invisible', hp: [150, 156], art: 'veil', elite: true,
+    moves: {
+      hymn:      { n: 'Hymn for the Lost', summon: { id: 'lost_soul', n: 1 }, block: 12 },
+      chorus:    { n: 'Chorus', atk: 5, hits: 4 },
+      crescendo: { n: 'Crescendo', atk: 24, shaken: 1 },
+    },
+    pattern: ['hymn', 'chorus', 'crescendo', 'chorus'],
+  },
+  proprietor: {
+    name: 'The Proprietor', hp: [210, 210], art: 'grey', boss: true,
+    moves: {
+      books:     { n: 'Open the Books', collect: 1, block: 16 },
+      every:     { n: 'Every Name', atk: 4, hits: 5 },
+      contract:  { n: 'Hellfire Contract', atk: 6, burn: 5, shaken: 1 },
+      foreclose: { n: 'Foreclosure', atk: 21 },
+      souls:     { n: 'Call the Debtors', summon: { id: 'lost_soul', n: 2 }, block: 12 },
+    },
+    pattern: ['books', 'every', 'contract', 'foreclose', 'souls'],
+    phase2: {
+      at: 0.5, pattern: ['foreclose', 'every', 'souls', 'contract', 'foreclose', 'books'],
+      text: 'The Proprietor sets down his pen. For the first time he looks at you, and he has your face.',
+      wrath: 2,
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -560,11 +640,28 @@ const ENCOUNTERS = {
       after: 'The Gentleman folds into himself like a letter and burns. The Between shudders, and for a moment you see Clara on the porch of your old house, shading her eyes against the sun. Then the world is just the world again.',
     },
   },
+  4: {
+    normal: [
+      { foes: ['ferryman'], role: 'ferry keeper', tells: ['Never takes coin from the living. Takes it from their eyes, after.', 'His boat throws no reflection on the river.'] },
+      { foes: ['bride_grey'], role: 'jilted bride', g: 'f', tells: ['Has waited at the chapel for forty years. The groom is due any minute.', 'Her veil is wet, and it has not rained here in a hundred years.'] },
+      { foes: ['hangman_shade'], role: 'hangman', tells: ['Measures every neck he meets with his eyes, politely.', 'Whistles while he ties knots. Nobody asked him to tie them.'] },
+    ],
+    elite: { foes: ['tallyman'], name: 'The Tallyman', bounty: 'Counts every sin in Lastlight and charges interest on each one. Nobody has ever seen him lose count.' },
+    elite2: { foes: ['choir'], name: 'The Choir Invisible', bounty: 'A hymn with no singers rolls down Mercy Flats every night. Anybody who joins in is never heard from again, except in the chorus.' },
+    boss: {
+      foes: ['proprietor'], guise: 'The Proprietor', kin: 'clara', reward: null,
+      before: "The Gentleman in Grey was only ever a collector. The books belong to the Proprietor, who owns every saloon, stockyard and chapel on the Far Side, and every name in the ledger. Clara's is on the last page. So is yours.",
+      taunt: '"Mr. Crane." The Proprietor does not look up from his ledger. "You broke my collector. Somebody has to pay for the damage, and you are so good at paying. A brother, a sister, a wife. What else have you got?"',
+      last: '',
+      after: 'The Proprietor burns like a library. When the smoke clears there is only the ledger on its lectern, open to the last page.',
+    },
+  },
 };
 
 const CHAPTERS = {
   1: { title: 'Chapter I — Dry Hollow', towns: ['Dry Hollow', 'Gallows Creek', 'Tumbleweed Flats', 'Rattler\'s Rest', 'Saint Ember'], kin: 'amos' },
   2: { title: 'Chapter II — Coldwater', towns: ['Coldwater', 'Perdition Wells', 'Widow\'s Gulch', 'Lantern Ridge', 'Bitter Spring'], kin: 'ruth' },
+  4: { title: 'Chapter IV — The Far Side', towns: ['Lastlight', 'Mercy Flats', 'Dry Bones', 'The Crossing', "Ledger's End"], kin: 'clara' },
   3: { title: 'Chapter III — Babel Mesa', towns: ['Babel Mesa', 'Last Chance', 'Brimstone Junction', 'Hollow Pine', 'Judgment Flats'], kin: 'clara' },
 };
 
@@ -629,5 +726,5 @@ const FOLK = {
 // also gathers cards.js and story.js, so `require('./data.js')` gets it all.
 if (typeof module !== 'undefined') {
   Object.assign(globalThis, {  elitesOf, SHOWDOWN_DECKS, SHOWDOWN_FIGHTS, CHALLENGES, DAILY_TWISTS, HEROES, STYLE_UNLOCKS, LEDGER, cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, CASE, HERO, FAMILY, STATUS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK });
-  module.exports = Object.assign({  elitesOf, SHOWDOWN_DECKS, SHOWDOWN_FIGHTS, CHALLENGES, DAILY_TWISTS, HEROES, STYLE_UNLOCKS, LEDGER, cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, CASE, HERO, FAMILY, STATUS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK }, require('./cards.js'), require('./story.js'));
+  module.exports = Object.assign({  elitesOf, SHOWDOWN_DECKS, SHOWDOWN_FIGHTS, CHALLENGES, DAILY_TWISTS, HEROES, STYLE_UNLOCKS, LEDGER, cap, TONIC_SLOTS, TONICS, INFAMY, POSSE_EVENT, CASE, HERO, FAMILY, STATUS, STARTER_DECK, KEEPSAKES, KEEPSAKE_POOL, ENEMIES, ENCOUNTERS, CHAPTERS, FOLK }, require('./cards.js'), require('./story.js'), require('./farside.js'));
 }

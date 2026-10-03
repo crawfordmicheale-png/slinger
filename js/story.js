@@ -223,6 +223,7 @@ const STORY_EVENTS = {
         req: r => r.gold >= 25,
         run: (r, api) => {
           r.gold -= 25;
+          r.flags.boyHelped = true; // ten years on, the boy becomes a hunter (unlocks Toby Lark)
           r.addJournal("Amos's Boy", 'You gave the stockyard boy twenty-five dollars. He gave you Amos\'s pocketknife, the one with the elk-horn handle that you gave Amos for his sixteenth birthday.');
           api.gainCard('bowie_knife', true);
           return 'He pockets the money and hands you a knife with an elk-horn handle. You gave it to Amos for his sixteenth birthday. (Gain an upgraded Bowie Knife.)';
@@ -522,15 +523,15 @@ function storyFor(hero) {
     return {
       intro: alt.intro, hunt: ch => alt.hunt[ch], chapter: ch => alt.chapters[ch],
       boss: ch => ({ ...ENCOUNTERS[ch].boss, ...alt.bosses[ch] }),
-      story: ch => alt.story[ch], finaleText: alt.finale, rest: alt.rest, endings: alt.endings,
+      story: ch => alt.story[ch], finaleText: alt.finale, finale4Text: alt.finale4, rest: alt.rest, endings: alt.endings,
       memories: alt.memories, restFlash: alt.restFlash, voiced: false,
     };
   }
   const kin = ch => FAMILY[ENCOUNTERS[ch].boss.kin];
   return {
-    intro: STORY.intro, hunt: ch => `Hunting the one who killed ${kin(ch)}.`, chapter: ch => CHAPTER_INTROS[ch],
-    boss: ch => ({ ...ENCOUNTERS[ch].boss, cry: `For ${kin(ch)}.`, rest: `${kin(ch)} can rest now.` }),
-    story: ch => ({ ...STORY_EVENTS[ch], kicker: kin(ch) }), finaleText: FINALE.text,
+    intro: STORY.intro, hunt: ch => (ch === 4 ? 'Hunting the one who keeps the books.' : `Hunting the one who killed ${kin(ch)}.`), chapter: ch => CHAPTER_INTROS[ch],
+    boss: ch => (ch === 4 ? { ...ENCOUNTERS[4].boss, cry: 'For all of them.', rest: '' } : { ...ENCOUNTERS[ch].boss, cry: `For ${kin(ch)}.`, rest: `${kin(ch)} can rest now.` }),
+    story: ch => ({ ...STORY_EVENTS[ch], kicker: kin(ch) }), finaleText: FINALE.text, finale4Text: FINALE4.text,
     rest: { req: FINALE.options[1].req, locked: FINALE.options[1].locked }, endings: ENDINGS,
     memories: MEMORIES, restFlash: 'You sleep with your hat over your eyes and your hand on your iron. You dream of Clara laughing.', voiced: true,
   };

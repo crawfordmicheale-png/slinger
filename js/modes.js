@@ -97,7 +97,7 @@ function modeEndHTML() {
   return '<button class="btn big" data-act="new-run">Ride again</button>';
 }
 
-const ROMAN = ['', 'I', 'II', 'III'];
+const ROMAN = ['', 'I', 'II', 'III', 'IV'];
 function dailyLine(run, o) {
   const first = HEROES[run.hero].name.split(' ')[run.hero === 'agnes' ? 1 : 0];
   const ch = o.win ? 'Ch III' : 'Ch ' + ROMAN[Math.min(3, run.chapter)];
@@ -509,7 +509,7 @@ SCREENS.challenges = () => {
       <div class="kicker">Wanted</div>
       <h2>Wanted Challenges</h2>
       <p>The whole story, with one rule changed. A new poster goes up every week; the old ones stay on the wall. Nothing unlocks, but every one you finish is marked in your Records.</p>
-      ${sv ? `<div class="row center"><button class="btn big" data-act="ch-continue">Continue: ${esc(CHALLENGES[sv.challenge].name)}<br><small>${esc(CHAPTERS[Math.min(3, sv.chapter)].title)} · ♥ ${sv.hp}/${sv.maxHp}</small></button></div>` : ''}
+      ${sv ? `<div class="row center"><button class="btn big" data-act="ch-continue">Continue: ${esc(CHALLENGES[sv.challenge].name)}<br><small>${esc(CHAPTERS[Math.min(4, sv.chapter)].title)} · ♥ ${sv.hp}/${sv.maxHp}</small></button></div>` : ''}
       <h3 class="setup-h">Who rides?</h3>
       ${hunterPicker()}
       <div class="posters">${ids.map(k => `<div class="wanted-card ${k === feat ? 'featured' : ''} ${p.challenges[k] ? 'done' : ''}">

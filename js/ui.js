@@ -110,7 +110,7 @@ function renderHUD() {
       <span class="hud-infamy inf-${r.infamy >= 7 ? 3 : r.infamy >= 4 ? 2 : r.infamy >= 1 ? 1 : 0}" data-tip="${esc(INFAMY.desc(r.infamy))}" aria-label="Infamy ${r.infamy}: ${INFAMY.label(r.infamy)}"><span class="inf-label">${INFAMY.label(r.infamy)}</span><span class="inf-icon" aria-hidden="true">⚑</span> ${r.infamy}</span>
       <span class="hud-tonics" data-tip="${esc(r.tonics.length ? 'Tonics: ' + r.tonics.map(t => TONICS[t].name).join(', ') + '. Use them during a fight.' : 'No tonics in your satchel.')}">${tonicIcons(r.tonics, false)}</span>
     </div>
-    <div class="hud-mid">${r.mode === 'showdown' && S.sd ? `Showdown · Fight ${Math.min(S.sd.idx + 1, SHOWDOWN_FIGHTS.length)} of ${SHOWDOWN_FIGHTS.length}` : r.chapter <= 3 ? CHAPTERS[r.chapter].title : ''}${r.mode === 'long' ? ` · Lap ${r.lap + 1} · Bounty ${r.bounty}` : ''}</div>
+    <div class="hud-mid">${r.mode === 'showdown' && S.sd ? `Showdown · Fight ${Math.min(S.sd.idx + 1, SHOWDOWN_FIGHTS.length)} of ${SHOWDOWN_FIGHTS.length}` : CHAPTERS[r.chapter] ? CHAPTERS[r.chapter].title : ''}${r.mode === 'long' ? ` · Lap ${r.lap + 1} · Bounty ${r.bounty}` : ''}</div>
     <div class="hud-right">
       <span class="keepsakes">${r.keepsakes.map(keepsakeHTML).join('')}</span>
       <button class="btn small" data-act="journal">Journal (${r.journal.length})</button>
@@ -191,10 +191,13 @@ function soundButtons() {
 // Which music plays on which screen.
 function musicFor(name) {
   if (name === 'combat') return S.fightKind === 'boss' ? 'boss' : 'between';
-  if (name === 'boss' || name === 'finale') return 'between';
   if (name === 'gameover') return 'somber';
+  if (onFarSide()) return 'farside';
+  if (name === 'boss' || name === 'finale') return 'between';
   return 'trail';
 }
+/** Chapter IV happens in the Between itself: its own backdrop and its own music. */
+const onFarSide = () => !!(S.run && S.run.chapter === 4 && S.run.mode !== 'showdown');
 
 // Which recorded line (art/voice/<id>.mp3) plays when a screen opens.
 function voiceFor(name) {
@@ -203,7 +206,7 @@ function voiceFor(name) {
   if (name === 'boss') return `taunt_${ch}`;
   if (!ST().voiced) return null;
   if (name === 'chapterEnd' && ENCOUNTERS[ch].boss.last) return `last_${ch}`;
-  if (name === 'finale') return 'finale';
+  if (name === 'finale') return ch === 4 ? 'finale_4' : 'finale';
   return null;
 }
 
@@ -255,6 +258,7 @@ function setScreen(name) {
   if (name !== prev && SETTINGS.autoVoice && S.run) AUDIO.voice(voiceFor(name));
   S.sel = null;
   document.body.classList.toggle('between', name === 'combat' || name === 'finale');
+  document.body.classList.toggle('farside', onFarSide());
   render();
   window.scrollTo(0, 0);
 }
@@ -299,7 +303,7 @@ const SCREENS = {
       <div class="menu">
         ${(() => {
           const sv = loadSave();
-          return sv ? `<button class="btn big" data-act="continue">Continue<br><small>${esc(CHAPTERS[Math.min(3, sv.chapter)].title)} · ♥ ${sv.hp}/${sv.maxHp}</small></button>` : '';
+          return sv ? `<button class="btn big" data-act="continue">Continue<br><small>${esc(CHAPTERS[Math.min(4, sv.chapter)].title)} · ♥ ${sv.hp}/${sv.maxHp}</small></button>` : '';
         })()}
         <button class="btn ${loadSave() ? '' : 'big'}" data-act="setup">${loadSave() ? 'New Hunt' : 'Ride Out'}</button>
         <div class="menu-row">
@@ -559,13 +563,17 @@ const SCREENS = {
 
   finale: () => {
     const r = S.run;
+    const four = r.chapter === 4;
+    // The Far Side is offered after Chapter III in the story and the Wanted challenges.
+    const options = four ? FINALE4.options
+      : FINALE.options.filter(o => o.id !== 'farside' || r.mode === 'story' || r.mode === 'challenge');
     return `
       <section class="panel story finale split">
-        <div class="boss-art">${ART.demonArt('grey_gentleman')}</div>
+        <div class="boss-art">${four ? '<img class="paint" src="art/ledger.webp" alt="" onerror="this.remove()">' : ART.demonArt('grey_gentleman')}</div>
         <div class="split-text">
-        ${ST().finaleText.map((p, i) => `<p class="${i ? 'speech' : ''}">${esc(p)}${i && ST().voiced ? ' ' + replay('finale') : ''}</p>`).join('')}
+        ${(four ? ST().finale4Text : ST().finaleText).map((p, i) => `<p class="${i ? 'speech' : ''}">${esc(p)}${i && ST().voiced ? ' ' + replay(four ? 'finale_4' : 'finale') : ''}</p>`).join('')}
         <div class="options">
-          ${FINALE.options.map(o => {
+          ${options.map(o => {
             const rest = o.id === 'rest' ? ST().rest : null;
             const ok = rest ? rest.req(r) : !o.req || o.req(r);
             return `<button class="btn option" data-act="ending" data-id="${o.id}" ${ok ? '' : 'disabled'}>${esc(o.label)}${ok ? '' : `<br><small>${esc(rest ? rest.locked : o.locked)}</small>`}</button>`;
@@ -593,7 +601,7 @@ const SCREENS = {
     <section class="panel story gameover">
       <h2>Here lies ${esc(heroDef().name)}</h2>
       <p>${esc(STORY.death)}</p>
-      <p class="stats">${esc(CHAPTERS[Math.min(3, S.run.chapter)].title)} · Demons sent back: ${S.run.kills}</p>
+      <p class="stats">${esc(CHAPTERS[Math.min(4, S.run.chapter)].title)} · Demons sent back: ${S.run.kills}</p>
       ${modeEndHTML()}
       <button class="btn" data-act="title">Title</button>
     </section>`,
@@ -713,7 +721,7 @@ function loadProfile() {
   try { return Object.assign(base, JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}')); } catch (e) { return base; }
 }
 function saveProfile(p) { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch (e) { /* storage unavailable */ } }
-const UNLOCK_NAMES = { brawl: 'Brawler cards', seer: 'Veil-seer cards', martha: 'Martha Wheeler', agnes: 'Sister Agnes' };
+const UNLOCK_NAMES = { brawl: 'Brawler cards', seer: 'Veil-seer cards', martha: 'Martha Wheeler', agnes: 'Sister Agnes', toby: 'Toby Lark' };
 /** Unlock something for future runs; returns its name if it's new. */
 function unlock(key) {
   const p = loadProfile();
@@ -760,6 +768,19 @@ function continueRun(mode = 'story') {
   S.run = r;
   S.combat = null;
   setScreen('map');
+}
+
+/** The Chapter III finale's fourth choice: through the Veil to the Far Side. */
+function followLedger() {
+  const r = S.run;
+  r.flags.farSide = true;
+  r.addJournal('Through the Veil', "The Gentleman's ledger fell open in the dust and the Veil tore like a curtain behind it. You followed it through. You did not look back.");
+  r.step = STEPS_PER_CHAPTER - 1; // the Gentleman is always the last stop
+  r.advance(S.nodeIdx);
+  r.hp = r.maxHp;
+  r.sight = r.maxSight;
+  AUDIO.sfx('slip');
+  showChapterIntro();
 }
 
 function showChapterIntro() {
@@ -833,7 +854,7 @@ function winFight() {
   }
   AUDIO.sfx('coin', 0.3);
   if (kind === 'boss') r.addJournal(ST().boss(r.chapter).rest || ST().boss(r.chapter).guise, ST().boss(r.chapter).after);
-  if (kind === 'boss' && r.chapter === 3 && r.mode !== 'long') { setScreen('finale'); return; }
+  if (kind === 'boss' && r.chapter >= r.lastChapter() && r.mode !== 'long') { setScreen('finale'); return; }
   S.reward = {
     title: kind === 'boss' ? 'Vengeance' : kind === 'elite' ? 'Bounty Collected' : 'Back Through the Veil',
     clean,
@@ -897,8 +918,8 @@ function howToPlay() {
   openModal(`
     <h3>How to Play</h3>
     <div class="how">
-      <p><b>The hunt.</b> Three chapters, each with its own map. Pick your route stop by stop: towns, wanted posters, campfires, trading posts, trail events and one story stop per chapter. At the end of each map waits one of the three demons behind it all.</p>
-      <p><b>Hunters and the Ledger.</b> Jonah Crane rides first. Finish the hunt to unlock Martha Wheeler; tell Sister Agnes the truth to unlock her. Beat the Hollow Steer and the Silk Widow to add Brawler and Veil-seer cards to future rewards. Win on the hardest Ledger page you have and the next page opens, each one harder than the last.</p>
+      <p><b>The hunt.</b> Three chapters, each with its own map. Pick your route stop by stop: towns, wanted posters, campfires, trading posts, trail events and one story stop per chapter. At the end of each map waits one of the three demons behind it all. After the third, you can follow the Gentleman's ledger through the Veil into an optional <b>Chapter IV</b>, the Far Side, where the one who keeps the books is waiting.</p>
+      <p><b>Hunters and the Ledger.</b> Jonah Crane rides first. Finish the hunt to unlock Martha Wheeler; tell Sister Agnes the truth to unlock her; give the stockyard boy in Dry Hollow the money Amos would have, and ten years on Toby Lark rides with you. Toby's dog <b>Ranger</b> bites the weakest demon after each of your turns, and his <b>traps</b> spring when a demon attacks. Beat the Hollow Steer and the Silk Widow to add Brawler and Veil-seer cards to future rewards. Win on the hardest Ledger page you have and the next page opens, each one harder than the last.</p>
       <p><b>Towns.</b> Somebody vanished last night, and one of the three strangers is a demon. You get a few questions: ask where they were, what they saw, or just watch them. Humans tell the truth. The demon lies, and it will try to frame someone. Or spend <b>Veil Sight</b> ${ART.eye(true)} to look through a stranger's skin and know for sure. Solve it without the Veil and the bounty is bigger. Draw on the demon and it starts <b>Exposed</b>. Draw on an innocent and you carry a curse card, and the real demon strikes first.</p>
       <p><b>Your iron.</b> Each of the six chambers holds a round: Lead, Silver, Hellfire, Blessed or Buckshot. Shot cards fire the next loaded round, and its effect rides on that shot. Your <b>Gun Belt</b> is how the gun is loaded at the start of every fight and what Reload puts back. Buy special rounds at trading posts and arrange them in the order you want them.</p>
       <p><b>The Between.</b> Every fight happens in the Between: the same town, only wrong.</p>
@@ -951,6 +972,7 @@ const ACTIONS = {
   'toggle-voice': () => { AUDIO.toggle('voice'); render(); },
   'voice': el => AUDIO.voice(el.dataset.id, 0),
   'ending': el => {
+    if (el.dataset.id === 'farside') { followLedger(); return; }
     S.endingId = el.dataset.id;
     const e = ST().endings[S.endingId];
     S.run.addJournal(e.title, e.text[0]);
@@ -1131,6 +1153,7 @@ const ACTIONS = {
     S.eventResult = o.run(S.run, eventApi());
     S.run.hp = Math.min(S.run.hp, S.run.maxHp);
     if (S.run.flags.confessed && S.run.mode === 'story') unlock('agnes');
+    if (S.run.flags.boyHelped && S.run.mode === 'story') unlock('toby');
     render();
   },
 };

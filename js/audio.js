@@ -4,7 +4,7 @@
 // Web Audio API: no audio files to download.
 //
 //   AUDIO.sfx(name, delaySeconds)   play a sound effect
-//   AUDIO.music(name)               'trail' | 'between' | 'boss' | 'somber' | null
+//   AUDIO.music(name)               'trail' | 'between' | 'boss' | 'farside' | 'somber' | null
 //   AUDIO.unlock()                  call from a user gesture (browsers require it)
 //   AUDIO.toggle('music'|'sfx'|'voice')  flip a channel on/off; remembered per browser
 //   AUDIO.voice(id) / stopVoice()   play a recorded line from art/voice/<id>.mp3
@@ -233,6 +233,21 @@ const AUDIO = (() => {
         if (i === 16 && loop % 2 === 1) whistle(71, t, this.dur * 8, 0.07, 70);
       },
     },
+    // The Far Side: a music-box waltz in D minor over a low drone, for Chapter IV.
+    farside: {
+      dur: 60 / 66, len: 24,
+      start() { return drone([26, 33], 260, 0.06, 0.05); },
+      step(i, t, loop) {
+        const bar = Math.floor(i / 3), beat = i % 3;
+        const roots = [50, 46, 48, 45, 50, 46, 43, 45]; // Dm Bb C A, Dm Bb Gm A
+        const minor = [0, 1, 0, 1, 0, 1, 0, 1][bar];
+        if (beat === 0) pluck(roots[bar] - 12, t, 0.32);
+        else pluck(roots[bar] + (beat === 1 ? 3 + minor : 7), t, 0.13);
+        const MEL = [74, 0, 77, 76, 0, 74, 72, 0, 70, 69, 0, 0, 74, 0, 77, 79, 0, 77, 76, 74, 73, 74, 0, 0];
+        if (MEL[i] && (loop % 3 !== 2 || i < 12)) bell(MEL[i], t, 0.042);
+        if (loop % 2 === 1 && i === 12) whistle(69, t, this.dur * 5, 0.06, 68);
+      },
+    },
     // Plays once, then silence.
     somber: {
       dur: 60 / 56 / 2, len: 36, once: true,
@@ -362,6 +377,21 @@ const AUDIO = (() => {
     },
     wrong(t) { const g = voice(bus.sfx, bus.sfxVerb, 0.6); const o = osc('triangle', 104, t, 1.2, g); o.frequency.linearRampToValueAtTime(92, t + 1); env(g.gain, t, 0.01, 0.3, 1.1); },
     toll(t) { bell(45, t, 0.3); bell(57, t + 0.01, 0.12); },
+    bark(t) { // Ranger: two short ruffs
+      [0, 0.16].forEach((d, k) => {
+        const g = voice(bus.sfx, bus.sfxVerb, 0.15); const bp = filter('bandpass', 620 - k * 60, 2.2);
+        bp.frequency.setValueAtTime(820 - k * 80, t + d); bp.frequency.exponentialRampToValueAtTime(420, t + d + 0.12);
+        noise(t + d, 0.14, bp); bp.connect(g); env(g.gain, t + d, 0.008, 0.55, 0.11);
+        const o = osc('sawtooth', 260 - k * 30, t + d, 0.14, filter('lowpass', 900)); o.disconnect();
+        const lp = filter('lowpass', 900); const og = voice(bus.sfx); o.connect(lp); lp.connect(og);
+        o.frequency.exponentialRampToValueAtTime(150, t + d + 0.12); env(og.gain, t + d, 0.006, 0.18, 0.11);
+      });
+    },
+    snap(t) { // a trap's iron jaws
+      const n = voice(bus.sfx, bus.sfxVerb, 0.3); const hp = filter('highpass', 2500); noise(t, 0.05, hp); hp.connect(n); env(n.gain, t, 0.001, 0.7, 0.04);
+      [1840, 2390, 3110].forEach((f, k) => { const g = voice(bus.sfx, bus.sfxVerb, 0.4); osc('triangle', f, t + 0.005 * k, 0.4, g); env(g.gain, t + 0.005 * k, 0.001, 0.09, 0.32); });
+      tom(t, 90, 0.25, bus.sfx);
+    },
   };
 
   // ---- voice acting -----------------------------------------------------------------

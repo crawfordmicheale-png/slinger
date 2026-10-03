@@ -430,6 +430,76 @@ const CARDS = {
     play: (c, v) => c.power('clairvoyance', v.ex),
   },
 
+  // ---- Tracker: Toby Lark's dog and traps -----------------------------------
+  // Ranger bites the weakest demon after every one of your turns. Traps wait
+  // until a demon attacks, then go off before the blow lands.
+  sic_em: {
+    name: "Sic 'Em", type: 'attack', rarity: 'starter', cost: 1, target: 'enemy', style: 'track',
+    v: { dmg: 2 }, up: { dmg: 5 },
+    text: v => `Ranger bites now, ${v.dmg} harder than usual.`,
+    play: (c, v, t) => c.dogBite(t, v.dmg),
+  },
+  bear_trap: {
+    name: 'Bear Trap', type: 'skill', rarity: 'starter', cost: 1, style: 'track',
+    v: { dmg: 10, sh: 1 }, up: { dmg: 14, sh: 2 },
+    text: v => `Set a trap: the next demon to attack takes ${v.dmg} damage and ${v.sh} Shaken first.`,
+    play: (c, v) => c.setTrap(v.dmg, v.sh),
+  },
+  good_boy: {
+    name: 'Good Boy', type: 'skill', rarity: 'common', cost: 0, style: 'track',
+    v: { b: 2, draw: 1 }, up: { b: 3, draw: 1 },
+    text: v => `Ranger bites ${v.b} harder for the rest of the fight. Draw ${v.draw}.`,
+    play: (c, v) => { c.dogBoost(v.b); c.draw(v.draw); },
+  },
+  guard_dog: {
+    name: 'Guard Dog', type: 'skill', rarity: 'common', cost: 1, style: 'track',
+    v: { cov: 5 }, up: { cov: 8 },
+    text: v => `Gain ${v.cov} Cover, plus Ranger's bite.`,
+    play: (c, v) => c.cover(v.cov + c.dogPower()),
+  },
+  fetch: {
+    name: 'Fetch', type: 'skill', rarity: 'common', cost: 0, style: 'track',
+    v: { r: 2, draw: 1 }, up: { r: 3, draw: 1 },
+    text: v => `Ranger fetches ${v.r} rounds: load them. Draw ${v.draw}.`,
+    play: (c, v) => { c.reload(v.r); c.draw(v.draw); },
+  },
+  snare: {
+    name: 'Snare', type: 'skill', rarity: 'common', cost: 1, target: 'enemy', style: 'track',
+    v: { sh: 2, dmg: 5 }, up: { sh: 2, dmg: 9 },
+    text: v => `Apply ${v.sh} Shaken. Set a trap for ${v.dmg}.`,
+    play: (c, v, t) => { c.apply(t, 'shaken', v.sh); c.setTrap(v.dmg, 0); },
+  },
+  on_the_scent: {
+    name: 'On the Scent', type: 'skill', rarity: 'uncommon', cost: 1, target: 'enemy', style: 'track',
+    v: { ex: 2 }, up: { ex: 3 },
+    text: v => `Apply ${v.ex} Exposed. Ranger bites it.`,
+    play: (c, v, t) => { c.apply(t, 'exposed', v.ex); c.dogBite(t, 0); },
+  },
+  tripwire: {
+    name: 'Tripwire', type: 'skill', rarity: 'uncommon', cost: 1, style: 'track',
+    v: { dmg: 6 }, up: { dmg: 9 },
+    text: v => `Set two traps of ${v.dmg} damage.`,
+    play: (c, v) => { c.setTrap(v.dmg, 0); c.setTrap(v.dmg, 0); },
+  },
+  pack_hunter: {
+    name: 'Pack Hunter', type: 'power', rarity: 'uncommon', cost: 2, style: 'track',
+    v: {}, up: { cost: 1 },
+    text: () => 'Ranger bites twice after each of your turns.',
+    play: c => c.power('pack', 1),
+  },
+  deadfall: {
+    name: 'Deadfall', type: 'skill', rarity: 'rare', cost: 2, style: 'track',
+    v: { dmg: 24 }, up: { dmg: 32 },
+    text: v => `Set a deadfall: the next demon to attack takes ${v.dmg} damage first.`,
+    play: (c, v) => c.setTrap(v.dmg, 0),
+  },
+  loyal: {
+    name: 'Loyal to the End', type: 'power', rarity: 'rare', cost: 1, style: 'track',
+    v: { b: 1 }, up: { b: 2 },
+    text: v => `Ranger bites ${v.b} harder at the start of each of your turns.`,
+    play: (c, v) => c.power('loyal', v.b),
+  },
+
   // ---- Curses ------------------------------------------------------------
   blood_on_hands: {
     name: 'Blood on Your Hands', type: 'curse', rarity: 'curse', cost: null, unplayable: true,

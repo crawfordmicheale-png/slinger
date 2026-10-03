@@ -108,5 +108,7 @@ const ART = (() => {
     `<div class="portrait-stack">${img(f.img || 'folk_0', 'paint guise', f.name, folk(seed, null))}` +
     (demonId ? img(demonId, 'paint true-form', ENEMIES[demonId].name, demon(ENEMIES[demonId].art)) : '') + '</div>';
 
-  return { demon, folk, hero, eye, demonArt, heroArt, folkArt };
+  const dogArt = () => img('ranger', 'paint dog-paint', 'Ranger', demon('hound'));
+
+  return { demon, folk, hero, eye, demonArt, heroArt, folkArt, dogArt };
 })();

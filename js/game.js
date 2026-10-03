@@ -91,6 +91,11 @@ class Combat {
     this.unveiled = false;    // Peyote Tea: every hidden intent is visible
     this.lastAttack = null;   // the Chalk Wraith recites it back at you
     this.freed = 0;           // hostages freed this fight
+    // Toby Lark's dog and traps. Ranger bites the weakest demon after each of
+    // your turns; a trap goes off on the next demon that attacks.
+    const dog = HEROES[run.hero].dog;
+    this.p.dog = dog ? { bite: dog + (run.has('rangers_collar') ? 1 : 0) + (run.flags.rangerBonus || 0) } : null;
+    this.p.traps = [];
     this.collected = [];      // cards the Gentleman took as payment
     this.enemies = [];
     foeIds.forEach(id => this.spawn(id));
@@ -110,6 +115,7 @@ class Combat {
     if (opts.ambushed) { this.applySelf('shaken', 2); this.say('They got the drop on you.'); }
 
     this.startTurn();
+    if (run.has('elk_knife')) this.nextShotBonus += 4;
   }
 
   // ---- bookkeeping ----------------------------------------------------------
@@ -367,6 +373,22 @@ class Combat {
     }
   }
 
+  // ---- the dog and the traps (Toby Lark) ------------------------------------------
+  /** How hard Ranger bites right now (0 with no dog). */
+  dogPower() { return this.p.dog ? this.p.dog.bite : 0; }
+  /** Ranger bites `t` (or the weakest demon) for his bite plus `extra`. */
+  dogBite(t, extra = 0) {
+    if (!this.p.dog) return;
+    const target = t && t.hp > 0 ? t : this.alive().sort((a, b) => a.hp - b.hp)[0];
+    if (!target) return;
+    this.emit({ type: 'bite', uid: target.uid });
+    this.damage(this.dogSrc(), target, this.p.dog.bite + extra);
+  }
+  dogBoost(n) { if (this.p.dog) this.p.dog.bite += n; }
+  /** Ranger and the traps hit as the player's side, without the player's Wrath. */
+  dogSrc() { return { isPlayer: true, st: {} }; }
+  setTrap(dmg, sh) { this.p.traps.push({ dmg, sh }); this.emit({ type: 'trapset', uid: 'player', n: this.p.traps.length }); }
+
   // ---- player actions ---------------------------------------------------------
   canPlay(card) {
     if (this.over) return { ok: false };
@@ -444,6 +466,7 @@ class Combat {
     if (p.pw.consecrate_ground) this.applyAll('burn', p.pw.consecrate_ground);
     if (p.pw.clairvoyance && this.alive().length) this.apply(pick(this.rng, this.alive()), 'exposed', p.pw.clairvoyance);
     if (p.pw.lawmans_instinct) p.block += p.pw.lawmans_instinct;
+    if (p.pw.loyal && p.dog) p.dog.bite += p.pw.loyal;
     let n = HERO.handSize;
     if (this.turn === 1 && this.run.has('snake_oil')) n += 2;
     if (this.run.twist === 'quick_draw') n += 1;
@@ -462,6 +485,9 @@ class Combat {
     for (const c of this.hand) (CARDS[c.id].ethereal ? this.exhausted : this.discard).push(c);
     this.hand = [];
     this.decay(this.p);
+    // Ranger goes for the weakest demon at the end of your turn.
+    if (this.p.dog) for (let k = 0; k < (this.p.pw.pack ? 2 : 1) && !this.over; k++) this.dogBite(null);
+    if (this.over) return [];
     return this.alive();
   }
 
@@ -505,6 +531,15 @@ class Combat {
     if (m.block) e.block += m.block;
     if (m.wrath) this.apply(e, 'wrath', m.wrath);
     if (m.heal) { e.hp = Math.min(e.maxHp, e.hp + m.heal); this.emit({ type: 'heal', uid: e.uid, n: m.heal }); }
+    // A trap goes off on the first demon to attack, before the blow lands.
+    if (m.atk && this.p.traps.length) {
+      const trap = this.p.traps.shift();
+      this.emit({ type: 'trap', uid: e.uid });
+      this.say(`${e.name} steps in your trap.`);
+      this.damage(this.dogSrc(), e, trap.dmg);
+      if (e.hp > 0 && trap.sh) this.apply(e, 'shaken', trap.sh);
+      if (e.hp <= 0 || this.over) return;
+    }
     if (m.atk) for (let i = 0; i < (m.hits || 1) && !this.over; i++) this.damage(e, this.p, m.atk);
     if (this.over) return;
     if (m.shaken) this.applySelf('shaken', m.shaken);
@@ -603,7 +638,7 @@ class Run {
     this.rng = makeRng(seed);
     this.hero = HEROES[opts.hero] ? opts.hero : 'jonah';
     this.ledger = Math.max(0, Math.min(LEDGER.length - 1, opts.ledger || 0));
-    this.styles = ['gun', 'holy'].concat(opts.styles || []);
+    this.styles = ['gun', 'holy'].concat(opts.styles || [], HEROES[opts.hero] && HEROES[opts.hero].dog ? ['track'] : []);
     const h = HEROES[this.hero];
     this.hp = this.maxHp = h.hp;
     this.gold = HERO.gold;
@@ -807,8 +842,11 @@ class Run {
   }
 
   /** Stops you can ride to next: {type, idx} */
+  /** The last chapter of this hunt: III, or IV for a hunter who followed the ledger through. */
+  lastChapter() { return this.flags.farSide ? 4 : 3; }
+
   reachable() {
-    if (this.chapter > 3) return [];
+    if (this.chapter > this.lastChapter()) return [];
     const col = this.map[this.step];
     const from = this.step === 0 ? col.map((_, i) => i) : this.map[this.step - 1][this.path[this.step - 1]].next;
     return from.map(idx => ({ type: col[idx].type, idx }));
@@ -826,7 +864,7 @@ class Run {
       this.step = 0;
       this.usedTowns = [];
       if (this.chapter > 3 && this.mode === 'long') { this.chapter = 1; this.lap++; }
-      if (this.chapter <= 3) this.newMap(); else this.choices = [];
+      if (this.chapter <= this.lastChapter()) this.newMap(); else this.choices = [];
       return;
     }
     this.choices = this.reachable();

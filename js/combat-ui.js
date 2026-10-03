@@ -56,10 +56,10 @@ SCREENS.combat = () => {
       <div class="battle-banner">The Between</div>
       <div class="arena">
         <div class="hero-side" data-uid="player" aria-label="${esc(`${heroDef().name}, ${p.hp} of ${p.maxHp} health${p.block ? `, ${p.block} cover` : ''}`)}">
-          <div class="hero-art">${ART.heroArt(S.run.hero)}</div>
+          <div class="hero-art">${ART.heroArt(S.run.hero)}${p.dog ? `<div class="dog-art" data-uid="dog" data-tip="${esc(`Ranger bites the weakest demon for ${p.dog.bite} after each of your turns.`)}">${ART.dogArt()}</div>` : ''}</div>
           <div class="foe-name">${esc(heroDef().name)}</div>
           ${barHTML(p.hp, p.maxHp, p.block)}
-          <div class="statuses">${statusHTML(p.st)}${Object.entries(p.pw).map(([k, n]) => `<span class="st st-power" data-tip="${esc(CARDS[k].name)}">${esc(CARDS[k].name)}${n > 1 ? ' ' + n : ''}</span>`).join('')}</div>
+          <div class="statuses">${p.dog ? `<span class="st st-dog" data-tip="Ranger bites the weakest demon after each of your turns.">Ranger ${p.dog.bite}</span>` : ''}${p.traps.length ? `<span class="st st-trap" data-tip="${esc('Armed traps go off on the next demons to attack, before their blows land: ' + p.traps.map(t => t.dmg + (t.sh ? ` + ${t.sh} Shaken` : '')).join(', ') + '.')}">Traps ${p.traps.length}</span>` : ''}${statusHTML(p.st)}${Object.entries(p.pw).map(([k, n]) => `<span class="st st-power" data-tip="${esc(CARDS[k].name)}">${esc(CARDS[k].name)}${n > 1 ? ' ' + n : ''}</span>`).join('')}</div>
         </div>
         <div class="foes">${enemies}</div>
       </div>
@@ -108,6 +108,14 @@ function afterCombatRender() {
     }
     else if (e.type === 'die') { dissolve(el); AUDIO.sfx('death'); buzz([15, 40, 15]); continue; }
     else if (e.type === 'dud') { text = 'Click. Dud.'; cls = 'blocked'; }
+    else if (e.type === 'bite') {
+      text = 'Ranger!'; cls = 'buff'; AUDIO.sfx('bark', delay / 1000);
+      slash(el.querySelector('.foe-art'), 'claw', delay);
+      const dogEl = app.querySelector('.dog-art');
+      if (dogEl) setTimeout(() => animate(dogEl, [{ transform: 'none' }, { transform: 'translateX(60px) scale(1.15)', offset: 0.4 }, { transform: 'none' }], { duration: 420, easing: 'ease-out' }), delay);
+    }
+    else if (e.type === 'trap') { text = 'Trap!'; cls = 'dmg'; AUDIO.sfx('snap', delay / 1000); burst(centerOf(el.querySelector('.foe-art') || el), 'spark', delay); }
+    else if (e.type === 'trapset') { text = 'Trap set'; cls = 'cover'; AUDIO.sfx('snap', delay / 1000); }
     else if (e.type === 'ward') { text = 'Ward broken'; cls = 'buff'; }
     else if (e.type === 'hostage_dead') { text = 'The hostage is dead'; cls = 'dmg'; AUDIO.sfx('wrong', delay / 1000); }
     else if (e.type === 'hostage_freed') { text = 'Hostage freed!'; cls = 'heal'; AUDIO.sfx('heal', delay / 1000); }

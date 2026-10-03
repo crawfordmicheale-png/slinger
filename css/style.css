@@ -647,7 +647,8 @@ button.tonic:hover { transform: translateY(-2px) scale(1.08); box-shadow: 0 0 10
 /* ---------------------------------------------------------------- setup: hunters & the ledger */
 .setup h2 { margin-bottom: 14px; }
 .setup-h { font-family: var(--font-title); font-weight: normal; color: var(--rust); margin: 22px 0 8px; }
-.hunters { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.hunters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.hunter-blurb { font-size: calc(13px * var(--ts, 1)); }
 .hunter {
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; text-align: center;
   background: #fff6e2; border: 2px solid #d8b57c; border-radius: 4px; cursor: pointer; color: var(--ink); font-family: var(--font-body);
@@ -1128,3 +1129,18 @@ body.between .bg-between { background-image: url("../art/town_between.webp"); }
 @media (max-width: 760px) { .hand { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); } }
 /* Cards dealt in from the draw pile start below the fold; don't let that flash a scrollbar. */
 @media (min-width: 761px) { #app.screen-combat { overflow-y: clip; overflow-clip-margin: 0; } }
+
+/* ================================================================ Chapter IV and Toby */
+/* the Far Side: the same canyon with the lamps put out */
+.bg-farside { opacity: 0; transition: opacity 1.4s ease; }
+body.farside:not(.between) .bg-day { opacity: 0; }
+body.farside .bg-farside { opacity: 1; background-image: url("../art/town_farside.webp"); }
+body.farside:not(.between) #vignette { background: radial-gradient(ellipse at center, transparent 45%, rgba(10, 14, 30, .55)); }
+/* Ranger, by Toby's side */
+.hero-art { position: relative; }
+.dog-art { position: absolute; right: -42%; bottom: -4px; width: 62%; height: 46%; z-index: 2; cursor: help; }
+.dog-art .paint { position: static !important; width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; filter: drop-shadow(0 0 6px #000a); animation: none !important; }
+.st-dog { color: #ffcf6a; }
+.st-trap { color: #c9d4da; border-color: #c9d4da66; }
+.finale .boss-art img.paint { width: 100%; height: 100%; object-fit: contain; }
+@media (max-width: 760px) { .dog-art { right: -55%; width: 70%; height: 52%; } }

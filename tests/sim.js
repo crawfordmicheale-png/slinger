@@ -48,7 +48,7 @@ function fight(run, foes, opts) {
   return c.over === 'win';
 }
 
-const bossHp = { 1: [], 2: [], 3: [] };
+const bossHp = { 1: [], 2: [], 3: [], 4: [] };
 function playRun(seed, opts = { styles: ['brawl', 'seer'] }) {
   const run = new Run(seed, opts);
   const api = {
@@ -59,7 +59,7 @@ function playRun(seed, opts = { styles: ['brawl', 'seer'] }) {
     removeCardPrompt: () => run.removeCard(run.deck[0].uid),
     upgradeCardPrompt: () => { const u = run.upgradable(); if (u.length) run.upgradeCard(u[0].uid); },
   };
-  while (run.chapter <= 3 && run.lap < (opts.maxLaps || 1)) {
+  while (run.chapter <= run.lastChapter() && run.lap < (opts.maxLaps || 1)) {
     assert(run.choices.length > 0);
     const ch = run.choices[Math.floor(run.rng() * run.choices.length)];
     let won = true;
@@ -77,6 +77,8 @@ function playRun(seed, opts = { styles: ['brawl', 'seer'] }) {
       bossHp[run.chapter].push(run.hp / run.maxHp);
       won = fight(run, b.foes, {});
       if (won) { run.afterFight(); run.gainKeepsake(b.reward === null && run.chapter < 3 ? run.randomKeepsake() : b.reward); run.hp = run.maxHp; }
+      // Following the ledger through the Veil, as the Chapter III finale offers.
+      if (won && run.chapter === 3 && opts.farSide) { run.flags.farSide = true; run.sight = run.maxSight; }
     } else if (ch.type === 'camp') {
       if (run.hp < run.maxHp * 0.75) run.hp = Math.min(run.maxHp, run.hp + Math.floor(run.maxHp * 0.3));
       else api.upgradeCardPrompt();
@@ -100,7 +102,7 @@ function playRun(seed, opts = { styles: ['brawl', 'seer'] }) {
     if (!won) return { win: false, chapter: run.chapter, step: run.step, lap: run.lap, bounty: run.bounty };
     run.advance(ch.idx);
   }
-  return { win: true, chapter: 4, lap: run.lap, bounty: run.bounty };
+  return { win: true, chapter: run.lastChapter() + 1, lap: run.lap, bounty: run.bounty };
 }
 
 // Every town must be solvable from the clues alone: assuming humans tell the
@@ -219,6 +221,36 @@ function suspects(town) {
     line.push(`${id} ${Math.round(100 * w / 20)}%`);
   }
   console.log('challenges (bot win rate): ' + line.join(', '));
+}
+
+// Chapter IV: hunters who follow the ledger through face the Far Side.
+{
+  for (const id of Object.keys(ENEMIES)) assert(ENEMIES[id].moves && ENEMIES[id].pattern.every(k => ENEMIES[id].moves[k]), id + ': every move in the pattern exists');
+  for (const hero of Object.keys(HEROES)) {
+    const st = storyFor(hero);
+    assert(st.chapter(4) && st.chapter(4).letter, hero + ': a Chapter IV letter');
+    assert(st.boss(4).taunt && st.story(4).options.length, hero + ': Chapter IV boss words and story stop');
+    assert(st.finale4Text && st.endings.lastpage && st.endings.keeper, hero + ': the Chapter IV finale and its endings');
+  }
+  const res = [];
+  for (let i = 0; i < 120; i++) res.push(playRun(5000 + i, { hero: Object.keys(HEROES)[i % 4], styles: ['brawl', 'seer'], farSide: true }));
+  const reached = res.filter(r => r.chapter >= 4).length, won = res.filter(r => r.win).length;
+  assert(res.every(r => r.chapter <= 5));
+  console.log(`chapter IV: 120 runs that follow the ledger, ${reached} reach the Far Side, ${won} win it (${reached ? Math.round(100 * won / reached) : 0}% of those who get there)`);
+}
+
+// Toby Lark: Ranger bites after every turn, traps go off before a blow lands.
+{
+  const run = new Run(9, { hero: 'toby' });
+  assert(run.styles.includes('track') && !new Run(9, { hero: 'jonah' }).styles.includes('track'), 'tracker cards are Toby\'s');
+  const c = new Combat(run, ['hollow_deputy'], {});
+  assert.strictEqual(c.p.dog.bite, HEROES.toby.dog + 1, "Ranger's Collar adds 1");
+  const hp0 = c.enemies[0].hp;
+  c.setTrap(10, 1);
+  c.endTurn();
+  assert(c.enemies[0].hp <= hp0 - c.p.dog.bite, 'Ranger bit at the end of the turn');
+  assert(c.log.some(l => /trap/.test(l)) || c.enemies[0].intent.atk === undefined, 'the trap went off on an attack');
+  console.log('toby: Ranger bites, traps spring');
 }
 
 const N = +process.argv[2] || 300;
