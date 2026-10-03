@@ -1126,3 +1126,5 @@ body.round-labels .cylinder .rmark { display: inline; }
 body.round-labels .cylinder .chamber.r-dud + .rmark { fill: #fff; }
 body.between .bg-between { background-image: url("../art/town_between.webp"); }
 @media (max-width: 760px) { .hand { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); } }
+/* Cards dealt in from the draw pile start below the fold; don't let that flash a scrollbar. */
+@media (min-width: 761px) { #app.screen-combat { overflow-y: clip; overflow-clip-margin: 0; } }
