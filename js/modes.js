@@ -10,9 +10,11 @@ function showSettings() {
   openModal(`
     <h3>Settings</h3>
     <div class="settings">
-      <div class="set-row"><span>Animation speed</span><div class="segs">${opt('fast', false, 'Normal')}${opt('fast', true, 'Fast')}</div></div>
+      <div class="set-row"><span>Motion</span><div class="segs">${opt('motion', 'full', 'Full')}${opt('motion', 'fast', 'Fast')}${opt('motion', 'still', 'Still')}</div></div>
       <div class="set-row"><span>Text size</span><div class="segs">${Object.keys(TEXT_SIZES).map(k => opt('text', k, k[0].toUpperCase() + k.slice(1))).join('')}</div></div>
       <div class="set-row"><span>Read letters and taunts aloud when they appear</span><div class="segs">${opt('autoVoice', true, 'On')}${opt('autoVoice', false, 'Off')}</div></div>
+      <div class="set-row"><span>Vibrate on hits (phones)</span><div class="segs">${opt('haptics', true, 'On')}${opt('haptics', false, 'Off')}</div></div>
+      <div class="set-row"><span>Label rounds with letters (easier to tell apart than colours)</span><div class="segs">${opt('roundLabels', true, 'On')}${opt('roundLabels', false, 'Off')}</div></div>
       <div class="set-row"><span>Sound</span><div class="segs">${soundButtons()}</div></div>
       <div class="set-row"><span>Guided first run</span><div class="segs"><button class="seg" data-act="reset-tutor">${profileFull().tutorial.done ? 'Show it again next hunt' : 'Not finished yet'}</button></div></div>
     </div>
@@ -117,28 +119,37 @@ SCREENS.records = () => {
   const days = Object.entries(p.daily).filter(([, d]) => d.line).sort((a, b) => b[0] - a[0]);
   const wins = Object.values(s.heroWins).reduce((a, b) => a + b, 0);
   const stat = (n, label) => `<div class="stat"><b>${n}</b><span>${label}</span></div>`;
+  const kv = rows => `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
   return `
-    <section class="panel records">
+    <section class="panel records wide">
       <h2>Records</h2>
-      <div class="stat-grid">
-        ${stat(s.runs, 'hunts ridden')}${stat(wins, 'hunts won')}${stat(s.kills, 'demons sent back')}
-        ${stat(s.bestLedger < 0 ? '—' : esc(LEDGER[s.bestLedger].name), 'hardest Ledger page won')}
-        ${stat(s.clean, 'clean solves')}${stat(`${s.streak} <small>(best ${s.bestStreak})</small>`, 'clean-solve streak')}
+      <div class="rec-cols">
+        <div>
+          <h3 class="setup-h">The hunt</h3>
+          <div class="stat-grid compact">
+            ${stat(s.runs, 'hunts ridden')}${stat(wins, 'hunts won')}${stat(s.kills, 'demons sent back')}
+            ${stat(s.bestLedger < 0 ? '—' : esc(LEDGER[s.bestLedger].name), 'hardest page won')}
+            ${stat(s.clean, 'clean solves')}${stat(`${s.streak} <small>(best ${s.bestStreak})</small>`, 'clean streak')}
+          </div>
+          <table class="rec-table"><thead><tr><th></th><th>Rode</th><th>Won</th></tr></thead><tbody>${heroRows}</tbody></table>
+          <h3 class="setup-h">Endings seen</h3>
+          <ul class="rec-list">${endingRows}</ul>
+        </div>
+        <div>
+          <h3 class="setup-h">The Long Ride</h3>
+          ${kv([['Best bounty', p.long.best], ['Lap reached', p.long.lap || '—'], ['Rides', p.long.rides]])}
+          <h3 class="setup-h">The Casebook</h3>
+          ${kv([['Best file', `${p.casebook.best} / 300`], ['Cases closed', p.casebook.solved], ['Perfect cases', p.casebook.perfect]])}
+          <h3 class="setup-h">Showdown</h3>
+          ${kv(Object.entries(SHOWDOWN_DECKS).map(([k, d]) => [esc(d.name), p.showdown[k] ? `${p.showdown[k].turns} turns <small>(${esc(HEROES[p.showdown[k].hero].name)})</small>` : '—']))}
+        </div>
+        <div>
+          <h3 class="setup-h">Wanted challenges</h3>
+          <ul class="rec-list">${Object.entries(CHALLENGES).map(([k, c]) => `<li class="${p.challenges[k] ? 'won' : ''}">${p.challenges[k] ? '✔' : '·'} <b>${esc(c.name)}</b>${p.challenges[k] ? ` (${esc(HEROES[p.challenges[k].hero].name)})` : ''}</li>`).join('')}</ul>
+          <h3 class="setup-h">Daily Hunts</h3>
+          ${days.length ? `<ul class="rec-list daily-list">${days.slice(0, 7).map(([, d]) => `<li class="${d.win ? 'won' : ''}">${esc(d.line)}</li>`).join('')}</ul>` : '<p class="sub">None ridden yet.</p>'}
+        </div>
       </div>
-      <h3 class="setup-h">Hunters</h3>
-      <table class="rec-table"><thead><tr><th></th><th>Rode</th><th>Won</th></tr></thead><tbody>${heroRows}</tbody></table>
-      <h3 class="setup-h">Endings seen</h3>
-      <ul class="rec-list">${endingRows}</ul>
-      <h3 class="setup-h">Daily Hunts</h3>
-      ${days.length ? `<ul class="rec-list daily-list">${days.slice(0, 7).map(([, d]) => `<li class="${d.win ? 'won' : ''}">${esc(d.line)}</li>`).join('')}</ul>` : '<p class="sub">None ridden yet.</p>'}
-      <h3 class="setup-h">The Casebook</h3>
-      <div class="stat-grid">${stat(p.casebook.best, 'best case file (of 300)')}${stat(p.casebook.solved, 'cases closed')}${stat(p.casebook.perfect, 'perfect cases')}</div>
-      <h3 class="setup-h">The Long Ride</h3>
-      <div class="stat-grid">${stat(p.long.best, 'best bounty')}${stat(p.long.lap || '—', 'lap reached on that ride')}${stat(p.long.rides, 'rides')}</div>
-      <h3 class="setup-h">Showdown</h3>
-      <ul class="rec-list">${Object.entries(SHOWDOWN_DECKS).map(([k, d]) => `<li><b>${esc(d.name)}</b> · ${p.showdown[k] ? `won in ${p.showdown[k].turns} turns (${esc(HEROES[p.showdown[k].hero].name)})` : 'not won yet'}</li>`).join('')}</ul>
-      <h3 class="setup-h">Wanted challenges</h3>
-      <ul class="rec-list">${Object.entries(CHALLENGES).map(([k, c]) => `<li class="${p.challenges[k] ? 'won' : ''}">${p.challenges[k] ? '✔' : '·'} <b>${esc(c.name)}</b>${p.challenges[k] ? ` (${esc(HEROES[p.challenges[k].hero].name)})` : ''}</li>`).join('')}</ul>
       <div class="row center"><button class="btn big" data-act="title">Back</button></div>
     </section>`;
 };
@@ -286,26 +297,21 @@ SCREENS.case = () => {
   const person = (f, i) => {
     const out = f.caught || f.cleared || f.seen || cb.done;
     const reveal = out ? (f.demon ? 'demon' : 'human') : null;
-    const clues = [];
-    if (f.asked.alibi) clues.push(`<li class="clue"><b>Last night</b> ${esc(f.alibi)}</li>`);
-    if (f.asked.saw) clues.push(`<li class="clue"><b>Saw</b> ${esc(f.saw)}</li>`);
-    if (cb.done && f.fibber) clues.push(`<li class="clue fib"><b>The lie</b> Really at ${esc(f.truthAt)}. ${esc(f.name.split(' ')[0])} had ${f.g === 'f' ? 'her' : 'his'} own reasons for hiding it.</li>`);
     const mark = cb.marks[i] || 0;
-    const ask = (q, label) => `<button class="btn small ask" data-act="cb-ask" data-i="${i}" data-q="${q}" ${f.asked[q] || cb.done || f.caught ? 'disabled' : ''}>${label}</button>`;
-    return `<div class="folk ${reveal ? 'seen-' + reveal : ''} ${f.cleared ? 'gone' : ''} mark-${MARKS[mark]}">
-      <button class="cb-mark" data-act="cb-mark" data-i="${i}" title="Your notes: tap to mark" aria-label="Mark ${esc(f.name)}">${['?', '✔', '✖'][mark]}</button>
-      <div class="portrait">${ART.folkArt(f, reveal === 'demon' ? f.demon : null, i + c.town.length)}</div>
-      <div class="folk-name">${esc(f.name)}</div>
-      <div class="folk-role">the ${esc(f.role)}</div>
-      <ul class="tells">${clues.join('') || '<li>Waits to be asked.</li>'}</ul>
-      ${reveal ? `<div class="verdict ${f.cleared ? 'bad' : ''}">${f.demon ? 'DEMON: ' + esc(ENEMIES[f.demon].name) : f.cleared ? 'Human. You were wrong.' : 'Human.'}</div>` : ''}
-      ${cb.done || f.caught || f.cleared ? '' : `
-      <div class="folk-questions">${ask('alibi', 'Where were you?')}${ask('saw', 'What did you see?')}</div>
-      <div class="folk-actions">
-        ${f.seen ? '' : `<button class="btn small" data-act="cb-look" data-i="${i}" ${cb.veil ? '' : 'disabled'}>${ART.eye(true)} Look (${cb.veil})</button>`}
-        <button class="btn small danger" data-act="cb-accuse" data-i="${i}">Draw on them</button>
-      </div>`}
-    </div>`;
+    const live = !(cb.done || f.caught || f.cleared);
+    const ask = (q, label) => live ? `<button class="btn small ask" data-act="cb-ask" data-i="${i}" data-q="${q}">${label}</button>` : null;
+    const cell = (q, label, answer, prompt) => ({ label, answer: f.asked[q] ? answer : null, button: ask(q, prompt),
+      note: q === 'alibi' && cb.done && f.fibber ? `<span class="fib-note">A lie: really at ${esc(f.truthAt)}. ${esc(f.name.split(' ')[0])} had ${f.g === 'f' ? 'her' : 'his'} own reasons for hiding it.</span>` : '' });
+    return ledgerRow({
+      cls: `${reveal ? 'seen-' + reveal : ''} ${f.cleared ? 'gone' : ''} mark-${MARKS[mark]} ${cb.done && f.fibber ? 'fibber' : ''}`,
+      art: ART.folkArt(f, reveal === 'demon' ? f.demon : null, i + c.town.length),
+      lead: `<button class="cb-mark" data-act="cb-mark" data-i="${i}" title="Your notes: tap to mark" aria-label="Mark ${esc(f.name)}">${['?', '✔', '✖'][mark]}</button>`,
+      name: f.name, role: f.role,
+      verdict: reveal ? `<div class="verdict ${f.cleared ? 'bad' : ''}">${f.demon ? 'DEMON: ' + esc(ENEMIES[f.demon].name) : f.cleared ? 'Human. You were wrong.' : 'Human.'}</div>` : '',
+      cells: [cell('alibi', 'Last night', f.alibi, 'Where were you?'), cell('saw', 'Saw', f.saw, 'What did you see?')],
+      actions: live ? `${f.seen ? '' : `<button class="btn small" data-act="cb-look" data-i="${i}" ${cb.veil ? '' : 'disabled'}>${ART.eye(true)} Look (${cb.veil})</button>`}
+        <button class="btn small danger" data-act="cb-accuse" data-i="${i}">Draw on them</button>` : '',
+    });
   };
   const score = caseScore(cb);
   return `
@@ -316,15 +322,15 @@ SCREENS.case = () => {
       <div class="casebar">
         <span class="qleft" data-tip="The fewest questions that can crack this case.">Asked ${cb.asked} · Par ${c.par}</span>
         <span class="qleft">Demons caught ${caught}/2</span>
-        <span class="hint">Humans tell the truth about what they saw. Demons lie. Every question past par costs 10 points; the Veil costs 40; a wrong draw costs 50.</span>
+        <span class="hint" data-tip="Every question past par costs 10 points; the Veil costs 40; a wrong draw costs 50.">Humans tell the truth about what they saw. Demons lie. Past par −10 · Veil −40 · wrong draw −50</span>
       </div>
-      ${cb.done ? `<div class="case-result">
+      ${cb.done ? `<div class="case-result slim">
           <h3>${cb.wrong || cb.usedVeil || cb.asked > c.par ? 'Case closed' : 'A perfect case'}</h3>
           <p>${cb.asked} questions (par ${c.par})${cb.usedVeil ? ' · used the Veil' : ''}${cb.wrong ? ` · ${cb.wrong} wrong draw${cb.wrong > 1 ? 's' : ''}` : ''}</p>
           <p class="big-score">${score} / 100</p>
           <button class="btn big" data-act="cb-next">${cb.idx + 1 < CASE_FILE.length ? 'Next case' : 'Close the file'}</button>
         </div>` : ''}
-      <div class="folks">${c.folk.map(person).join('')}</div>
+      <div class="folks ledger cb-ledger">${c.folk.map(person).join('')}</div>
       <div class="row center"><button class="btn" data-act="casebook">Leave the case</button></div>
     </section>`;
 };
@@ -379,7 +385,7 @@ SCREENS.longride = () => {
   const p = profileFull();
   const sv = loadSave('long');
   return `
-    <section class="panel longride">
+    <section class="panel longride wide">
       <div class="kicker">Endless</div>
       <h2>The Long Ride</h2>
       <p>The Gentleman goes down, and the ledger writes him back in. Ride the three chapters again and again, with no story stops and no letters. Every lap the demons have a quarter more health and hit harder. Your score is the bounty you collect.</p>
@@ -404,7 +410,7 @@ SCREENS.showdown = () => {
   const p = profileFull();
   const pick_ = S.sdPreset && SHOWDOWN_DECKS[S.sdPreset] ? S.sdPreset : 'gun';
   return `
-    <section class="panel showdown">
+    <section class="panel showdown wide">
       <div class="kicker">Boss rush</div>
       <h2>Showdown</h2>
       <p>Six fights in a row: each chapter's wanted demon, then its boss. You ride in with 10 extra health. Between fights you heal a third, take a card, and collect what the demon was carrying: a tonic from a wanted demon, a keepsake from a boss. Win in as few turns as you can.</p>
@@ -428,13 +434,15 @@ function startShowdown() {
 SCREENS.sdNext = () => {
   const sd = S.sd, [ch, kind] = SHOWDOWN_FIGHTS[sd.idx], f = sd.foes[sd.idx];
   return `
-    <section class="panel story boss-intro">
+    <section class="panel story boss-intro split">
+      <div class="boss-art">${ART.demonArt(f.foes[0])}</div>
+      <div class="split-text">
       <div class="kicker">Fight ${sd.idx + 1} of ${SHOWDOWN_FIGHTS.length} · ${esc(CHAPTERS[ch].title.split(' — ')[0])}</div>
       <h2>${esc(kind === 'boss' ? f.guise : f.name)}</h2>
-      <div class="boss-art">${ART.demonArt(f.foes[0])}</div>
       <p class="${kind === 'boss' ? 'speech' : ''}">${esc(T(kind === 'boss' ? f.taunt : f.bounty))}</p>
       <p class="stats">♥ ${S.run.hp}/${S.run.maxHp} · Turns so far: ${sd.turns}</p>
       <button class="btn big danger" data-act="sd-fight">${kind === 'boss' ? esc(f.cry) : 'Hunt it down'}</button>
+      </div>
     </section>`;
 };
 function showdownWon(c) {
@@ -497,7 +505,7 @@ SCREENS.challenges = () => {
   const ids = [feat, ...Object.keys(CHALLENGES).filter(k => k !== feat)];
   const sv = loadSave('challenge');
   return `
-    <section class="panel challenges">
+    <section class="panel challenges wide">
       <div class="kicker">Wanted</div>
       <h2>Wanted Challenges</h2>
       <p>The whole story, with one rule changed. A new poster goes up every week; the old ones stay on the wall. Nothing unlocks, but every one you finish is marked in your Records.</p>

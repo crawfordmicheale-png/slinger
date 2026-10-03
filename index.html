@@ -2,13 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Slinger</title>
   <meta name="description" content="A fantasy wild-west deckbuilding RPG. Hunt the demons that wear human skins.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rye&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="preload" as="image" href="art/town_day.webp">
+  <link rel="preload" as="image" href="art/hero.webp">
+  <meta name="theme-color" content="#2a1a10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cpath d=%22M3 13h26l-3 3H6z%22 fill=%22%232a1a10%22/%3E%3Cpath d=%22M10 13l2-9h8l2 9z%22 fill=%22%232a1a10%22/%3E%3Ccircle cx=%2216%22 cy=%2222%22 r=%225%22 fill=%22%23b0231b%22/%3E%3C/svg%3E">
 </head>
 <body>
   <!-- The town backdrop. In the Between it is the same street, only wrong. -->
@@ -25,11 +31,14 @@
   <div id="modal" hidden></div>
   <div id="tip" hidden></div>
 
+  <script src="js/cards.js"></script>
   <script src="js/data.js"></script>
+  <script src="js/story.js"></script>
   <script src="js/game.js"></script>
   <script src="js/art.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/combat-ui.js"></script>
   <script src="js/modes.js"></script>
 </body>
 </html>

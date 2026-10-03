@@ -29,11 +29,14 @@ const S = {
 // ---- settings: stored per browser -------------------------------------------------
 const SETTINGS_KEY = 'slinger.settings.v1';
 const TEXT_SIZES = { small: 0.9, normal: 1, large: 1.15, huge: 1.3 };
-const SETTINGS = Object.assign({ fast: false, text: 'normal', autoVoice: true }, (() => {
+const SETTINGS = Object.assign({ motion: 'full', text: 'normal', autoVoice: true, haptics: true, roundLabels: false }, (() => {
   try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch (e) { return {}; }
 })());
+if (SETTINGS.fast !== undefined) { if (SETTINGS.fast) SETTINGS.motion = 'fast'; delete SETTINGS.fast; } // older saves
 function applySettings() {
-  document.body.classList.toggle('fast', !!SETTINGS.fast);
+  document.body.classList.toggle('fast', SETTINGS.motion === 'fast');
+  document.body.classList.toggle('still', reducedMotion());
+  document.body.classList.toggle('round-labels', !!SETTINGS.roundLabels);
   document.documentElement.style.setProperty('--ts', TEXT_SIZES[SETTINGS.text] || 1);
 }
 function saveSettings() {
@@ -41,7 +44,11 @@ function saveSettings() {
   applySettings();
 }
 /** Animation time scale: fast mode plays everything in a bit under half the time. */
-const SPD = () => (SETTINGS.fast ? 0.45 : 1);
+const SPD = () => (SETTINGS.motion === 'fast' ? 0.45 : 1);
+/** No movement at all: the player chose Still, or the device asks for reduced motion. */
+const reducedMotion = () => SETTINGS.motion === 'still' || !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+/** A short buzz on phones that support it (off in Settings). */
+const buzz = pattern => { try { if (SETTINGS.haptics && navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* not supported */ } };
 
 // The story as the current hunter lives it, and a title swap for generic text.
 const ST = () => storyFor(S.run ? S.run.hero : 'jonah');
@@ -78,7 +85,7 @@ function statusHTML(st) {
 
 function barHTML(hp, max, block = 0) {
   const pct = Math.max(0, Math.min(100, (hp / max) * 100));
-  return `<div class="bar"><div class="fill" style="width:${pct}%"></div>
+  return `<div class="bar" role="img" aria-label="${hp} of ${max} health${block ? `, ${block} cover` : ''}"><div class="fill" style="width:${pct}%"></div>
     <span class="bar-label">${hp} / ${max}</span>${block ? `<span class="block-badge" data-tip="Cover: absorbs damage. Cleared at the start of your turn.">${block}</span>` : ''}</div>`;
 }
 
@@ -100,7 +107,7 @@ function renderHUD() {
       <span class="hud-hp" data-tip="Health">♥ ${hp}/${r.maxHp}</span>
       <span class="hud-gold" data-tip="Gold">$ ${r.gold}</span>
       <span class="hud-sight" data-tip="Veil Sight: look through a stranger's skin to see what they really are, or see a veiled demon's next move. Restored at camp.">${eyes}</span>
-      <span class="hud-infamy inf-${r.infamy >= 7 ? 3 : r.infamy >= 4 ? 2 : r.infamy >= 1 ? 1 : 0}" data-tip="${esc(INFAMY.desc(r.infamy))}">${INFAMY.label(r.infamy)} ${r.infamy}</span>
+      <span class="hud-infamy inf-${r.infamy >= 7 ? 3 : r.infamy >= 4 ? 2 : r.infamy >= 1 ? 1 : 0}" data-tip="${esc(INFAMY.desc(r.infamy))}" aria-label="Infamy ${r.infamy}: ${INFAMY.label(r.infamy)}"><span class="inf-label">${INFAMY.label(r.infamy)}</span><span class="inf-icon" aria-hidden="true">⚑</span> ${r.infamy}</span>
       <span class="hud-tonics" data-tip="${esc(r.tonics.length ? 'Tonics: ' + r.tonics.map(t => TONICS[t].name).join(', ') + '. Use them during a fight.' : 'No tonics in your satchel.')}">${tonicIcons(r.tonics, false)}</span>
     </div>
     <div class="hud-mid">${r.mode === 'showdown' && S.sd ? `Showdown · Fight ${Math.min(S.sd.idx + 1, SHOWDOWN_FIGHTS.length)} of ${SHOWDOWN_FIGHTS.length}` : r.chapter <= 3 ? CHAPTERS[r.chapter].title : ''}${r.mode === 'long' ? ` · Lap ${r.lap + 1} · Bounty ${r.bounty}` : ''}</div>
@@ -110,7 +117,30 @@ function renderHUD() {
       ${S.screen !== 'combat' ? '<button class="btn small" data-act="belt">Gun Belt</button>' : ''}
       <button class="btn small" data-act="view-deck">Deck (${r.deck.length})</button>
       ${soundButtons()}
-    </div>`;
+      <button class="btn small" data-act="settings" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+    <button class="btn small hud-menu" data-act="hud-menu" aria-label="Menu: journal, gun belt, deck, keepsakes and settings">☰</button>`;
+}
+
+/** On a phone the header keeps only the vital signs; everything else lives in this menu. */
+function showHudMenu() {
+  const r = S.run;
+  openModal(`
+    <h3>${esc(heroDef().name)}</h3>
+    <div class="hud-sheet">
+      <div class="row center">
+        <button class="btn" data-act="journal">Journal (${r.journal.length})</button>
+        ${S.screen !== 'combat' ? '<button class="btn" data-act="belt">Gun Belt</button>' : ''}
+        <button class="btn" data-act="view-deck">Deck (${r.deck.length})</button>
+        <button class="btn" data-act="settings">Settings</button>
+      </div>
+      <div class="row center">${soundButtons()}</div>
+      ${r.tonics.length ? `<h4>Tonics</h4><ul class="sheet-list">${r.tonics.map(t => `<li>${tonicIcons([t], false).split('<span class="tonic empty">')[0]} <b>${esc(TONICS[t].name)}</b> — ${esc(TONICS[t].desc)}</li>`).join('')}</ul>` : ''}
+      <h4>Keepsakes</h4>
+      <ul class="sheet-list">${r.keepsakes.map(k => `<li>${keepsakeHTML(k)} <b>${esc(KEEPSAKES[k].name)}</b> — ${esc(KEEPSAKES[k].desc)}</li>`).join('')}</ul>
+      <p class="sub">${esc(INFAMY.label(r.infamy))} (Infamy ${r.infamy}). ${esc(INFAMY.desc(r.infamy))}</p>
+    </div>
+    <div class="row center"><button class="btn" data-act="close-modal">Close</button></div>`);
 }
 
 function tonicIcons(list, usable) {
@@ -177,6 +207,41 @@ function voiceFor(name) {
   return null;
 }
 
+/**
+ * One stranger as a row of the case ledger (towns and the Casebook): who they
+ * are, one cell per question (the ask button sits where the answer will
+ * appear), then what you can do about them. On a phone the row folds into a card.
+ */
+function ledgerRow(o) {
+  const cells = o.cells.map(c => `<div class="cell ${c.answer ? 'answered' : ''}"><b>${c.label}</b>${c.answer ? `<span class="answer">${esc(c.answer)}</span>${c.note || ''}` : c.button || '<span class="unasked">—</span>'}</div>`).join('');
+  return `<div class="folk ${o.cls || ''}">
+    <div class="portrait">${o.art}</div>
+    <div class="who">${o.lead || ''}<div class="folk-name">${esc(o.name)}</div><div class="folk-role">the ${esc(o.role)}</div>${o.tell ? `<p class="tell">${esc(o.tell)}</p>` : ''}${o.verdict || ''}</div>
+    ${cells}
+    <div class="folk-actions">${o.actions || ''}</div>
+  </div>`;
+}
+
+// ---- loading ahead: fetch the art a screen is about to need before it is needed
+const PRELOADED = new Set();
+function preloadArt(files) {
+  files.filter(f => f && !PRELOADED.has(f)).forEach(f => { PRELOADED.add(f); const im = new Image(); im.decoding = 'async'; im.src = `art/${f}.webp`; });
+}
+/** Whatever the stops on offer could put in front of you next. */
+function preloadForMap(r) {
+  const files = [];
+  r.choices.forEach(c => {
+    if (c.type === 'wanted') elitesOf(r.chapter).forEach(e => files.push(e.foes[0]));
+    if (c.type === 'boss') files.push(ST().boss(r.chapter).foes[0]);
+    if (c.type === 'town') ENCOUNTERS[r.chapter].normal.forEach(e => files.push(e.foes[0]));
+  });
+  preloadArt(files);
+}
+window.addEventListener('load', () => {
+  const later = window.requestIdleCallback || (f => setTimeout(f, 800));
+  later(() => { document.body.classList.add('art-ready'); preloadArt(['town_between', ...Object.values(HEROES).map(h => h.art)]); });
+});
+
 // A small replay button beside a voiced line.
 const replay = id => `<button class="btn small replay" data-act="voice" data-id="${id}" title="Hear it again" aria-label="Hear it again">▶</button>`;
 
@@ -184,6 +249,7 @@ function setScreen(name) {
   const prev = S.screen;
   S.screen = name;
   if (S.run && (name === 'map' || name === 'chapterIntro')) saveRun();
+  if (S.run && name === 'map') preloadForMap(S.run);
   if (S.run && (name === 'gameover' || name === 'victory')) clearSave(S.run.mode);
   AUDIO.music(musicFor(name));
   if (name !== prev && SETTINGS.autoVoice && S.run) AUDIO.voice(voiceFor(name));
@@ -194,12 +260,31 @@ function setScreen(name) {
 }
 
 function render() {
+  const focus = focusKey(document.activeElement);
   renderHUD();
   const fn = SCREENS[S.screen];
   app.className = 'screen-' + S.screen;
   app.innerHTML = fn ? fn() : '';
+  keyboardReady(document.body);
+  if (focus) { const el = document.querySelector(focus); if (el && !el.disabled) el.focus({ preventScroll: true }); }
   if (S.screen === 'combat') afterCombatRender();
   if (typeof coach === 'function') coach();
+}
+
+// ---- keyboard: everything clickable can be reached with Tab and pressed with Enter or Space
+/** Give clickable non-buttons (cards in hand, demons to target, map stops) a place in the tab order. */
+function keyboardReady(root) {
+  root.querySelectorAll('[data-act]:not(button):not(input):not(a)').forEach(el => {
+    if (!el.dataset.act) { el.removeAttribute('tabindex'); return; }
+    el.tabIndex = 0;
+    if (!el.getAttribute('role')) el.setAttribute('role', 'button');
+  });
+}
+/** A selector that finds "the same control" again after a re-render, so keyboard focus survives it. */
+function focusKey(el) {
+  if (!el || !el.dataset || !el.dataset.act) return null;
+  return ['act', 'i', 'q', 'id', 'uid', 'pile'].filter(k => el.dataset[k] !== undefined)
+    .map(k => `[data-${k}="${CSS.escape(el.dataset[k])}"]`).join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -304,27 +389,17 @@ const SCREENS = {
     const ask = (f, i, q, label) => `<button class="btn small ask" data-act="ask" data-i="${i}" data-q="${q}" ${f.asked[q] || qLeft <= 0 ? 'disabled' : ''}>${label}</button>`;
     const person = (f, i) => {
       const reveal = f.seen ? (f.demon ? 'demon' : 'human') : null;
-      const clues = [`<li>${esc(f.tells[0])}</li>`];
-      if (f.asked.alibi) clues.push(`<li class="clue"><b>Last night:</b> ${esc(f.alibi)}</li>`);
-      if (f.asked.saw) clues.push(`<li class="clue"><b>Saw:</b> ${esc(f.saw)}</li>`);
-      if (f.asked.watch) clues.push(`<li class="clue"><b>Watching:</b> ${esc(f.tells[1])}</li>`);
-      return `<div class="folk ${f.gone ? 'gone' : ''} ${reveal ? 'seen-' + reveal : ''}">
-        <div class="portrait">${ART.folkArt(f, f.demon && f.seen ? t.enc.foes[0] : null, i + t.name.length)}</div>
-        <div class="folk-name">${esc(f.name)}</div>
-        <div class="folk-role">the ${esc(f.role)}</div>
-        <ul class="tells">${clues.join('')}</ul>
-        ${f.seen ? `<div class="verdict">${f.demon ? 'DEMON — ' + esc(ENEMIES[t.enc.foes[0]].name) : 'Human. Just a person.'}</div>` : ''}
-        ${f.gone ? '<div class="verdict bad">You were wrong.</div>' : `
-        <div class="folk-questions">
-          ${ask(f, i, 'alibi', 'Where were you?')}
-          ${ask(f, i, 'saw', 'What did you see?')}
-          ${ask(f, i, 'watch', 'Watch them')}
-        </div>
-        <div class="folk-actions">
-          ${!f.seen ? `<button class="btn small" data-act="look" data-i="${i}" ${r.sight > 0 ? '' : 'disabled'}>${ART.eye(true)} Look (${r.sight})</button>` : ''}
-          <button class="btn small danger" data-act="accuse" data-i="${i}">Draw on them</button>
-        </div>`}
-      </div>`;
+      const cell = (q, label, answer, prompt) => ({ label, answer: f.asked[q] ? answer : null, button: f.gone ? null : ask(f, i, q, prompt) });
+      return ledgerRow({
+        cls: `${f.gone ? 'gone' : ''} ${reveal ? 'seen-' + reveal : ''}`,
+        art: ART.folkArt(f, f.demon && f.seen ? t.enc.foes[0] : null, i + t.name.length),
+        name: f.name, role: f.role, tell: f.tells[0],
+        verdict: f.gone ? '<div class="verdict bad">You were wrong.</div>'
+          : f.seen ? `<div class="verdict">${f.demon ? 'DEMON — ' + esc(ENEMIES[t.enc.foes[0]].name) : 'Human. Just a person.'}</div>` : '',
+        cells: [cell('alibi', 'Last night', f.alibi, 'Where were you?'), cell('saw', 'Saw', f.saw, 'What did you see?'), cell('watch', 'Watching', f.tells[1], 'Watch them')],
+        actions: f.gone ? '' : `${!f.seen ? `<button class="btn small" data-act="look" data-i="${i}" ${r.sight > 0 ? '' : 'disabled'}>${ART.eye(true)} Look (${r.sight})</button>` : ''}
+          <button class="btn small danger" data-act="accuse" data-i="${i}">Draw on them</button>`,
+      });
     };
     return `
       <section class="town">
@@ -335,9 +410,9 @@ const SCREENS = {
           <span class="hint">Humans tell the truth. The demon lies. Crack it without the Veil for a bigger bounty.</span>
         </div>
         ${S.flash ? `<p class="flash">${esc(S.flash)}</p>` : ''}
-        <div class="folks">${t.folk.map(person).join('')}</div>
+        <div class="folks ledger">${t.folk.map(person).join('')}</div>
         <div class="row center">
-          <button class="btn" data-act="leave-town" data-tip="The demon will follow you out and strike first.">Ride on without choosing</button>
+          <button class="btn small" data-act="leave-town" data-tip="The demon will follow you out and strike first.">Ride on without choosing</button>
         </div>
       </section>`;
   },
@@ -361,89 +436,14 @@ const SCREENS = {
   boss: () => {
     const b = ST().boss(S.run.chapter);
     return `
-      <section class="panel story boss-intro">
-        <h2>${esc(b.guise)}</h2>
+      <section class="panel story boss-intro split">
         <div class="boss-art">${ART.demonArt(b.foes[0])}</div>
-        <p>${esc(b.before)}</p>
-        <p class="speech">${esc(b.taunt)} ${ST().voiced ? replay(`taunt_${S.run.chapter}`) : ''}</p>
-        <button class="btn big danger" data-act="fight-boss">${esc(b.cry)}</button>
-      </section>`;
-  },
-
-  combat: () => {
-    const c = S.combat;
-    const p = c.p;
-    const selCard = S.sel !== null ? c.hand[S.sel] : null;
-    const targeting = selCard && c.needsTarget(selCard);
-    const enemies = c.enemies.map(e => {
-      const chips = c.intentInfo(e).map(i => i.kind === 'veil'
-        ? `<button class="intent i-veil" data-act="peek" data-uid="${e.uid}" ${S.run.sight > 0 ? '' : 'disabled'}>${ART.eye(true)} ?</button>`
-        : `<span class="intent i-${i.kind}">${INTENT_ICON[i.kind]}${i.label}</span>`).join('');
-      const hostage = e.hostage && e.hp > 0
-        ? `<span class="st st-hostage" data-tip="${esc(`Holding ${e.hostage.name}. Any single hit of ${e.hostage.threshold} or more damage kills them. Exposing the demon frees them.`)}">Hostage · ${e.hostage.threshold}+ kills</span>` : '';
-      return `<div class="foe ${e.hp <= 0 ? 'dead' : ''} ${targeting && e.hp > 0 ? 'targetable' : ''} ${e.boss ? 'is-boss' : ''} ${e.minion ? 'is-minion' : ''}" data-uid="${e.uid}" data-act="${targeting && e.hp > 0 ? 'target' : ''}">
-        <div class="intents" data-tip="${esc(c.intentText(e))}">${e.hp > 0 ? chips : ''}</div>
-        <div class="foe-art">${ART.demonArt(e.id)}</div>
-        <div class="foe-name">${esc(e.name)}</div>
-        ${barHTML(e.hp, e.maxHp, e.block)}
-        <div class="statuses">${hostage}${statusHTML(e.st)}</div>
-      </div>`;
-    }).join('');
-
-    const nextI = c.nextLoaded();
-    const chambers = Array.from({ length: p.maxRounds }, (_, i) => {
-      // The chamber that fires next sits at the top; the rest follow clockwise.
-      const k = (i - (nextI < 0 ? p.pos : nextI) + p.maxRounds) % p.maxRounds;
-      const a = (k / p.maxRounds) * Math.PI * 2 - Math.PI / 2;
-      const x = 50 + Math.cos(a) * 30, y = 50 + Math.sin(a) * 30;
-      const r = p.chambers[i];
-      return `<circle class="chamber ${r ? 'loaded r-' + r : ''} ${i === nextI ? 'next' : ''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.maxRounds > 6 ? 9 : 11}" ${r ? `style="fill:${ROUNDS[r].color}"` : ''}/>`;
-    }).join('');
-    const order = c.peekRounds(p.maxRounds);
-    const cylTip = order.length ? 'Fires in this order: ' + order.map(r => ROUNDS[r].name).join(' → ') + '. Reload refills empty chambers from your gun belt.' : 'Empty. Play Reload.';
-
-    const hand = c.hand.map((card, i) => {
-      const ok = c.canPlay(card).ok;
-      const target = S.sel === i ? null : undefined;
-      const onlyFoe = c.alive().length === 1 ? c.alive()[0] : null;
-      const text = c.previewValues(card, onlyFoe || target);
-      const n = c.hand.length;
-      const rot = (i - (n - 1) / 2) * Math.min(5, 30 / n);
-      // The slot is a stable hit-box; only the card inside it lifts on hover.
-      return `<div class="slot ${ok ? 'playable' : 'unplayable'} ${S.sel === i ? 'selected' : ''}" data-act="card" data-i="${i}" style="--rot:${rot}deg" title="${ok ? '' : esc(c.canPlay(card).why || '')}">${cardHTML(card, { text })}</div>`;
-    }).join('');
-
-    return `
-      <section class="battle">
-        <div class="battle-banner">The Between</div>
-        <div class="arena">
-          <div class="hero-side" data-uid="player">
-            <div class="hero-art">${ART.heroArt(S.run.hero)}</div>
-            <div class="foe-name">${esc(heroDef().name)}</div>
-            ${barHTML(p.hp, p.maxHp, p.block)}
-            <div class="statuses">${statusHTML(p.st)}${Object.entries(p.pw).map(([k, n]) => `<span class="st st-power" data-tip="${esc(CARDS[k].name)}">${esc(CARDS[k].name)}${n > 1 ? ' ' + n : ''}</span>`).join('')}</div>
-          </div>
-          <div class="foes">${enemies}</div>
+        <div class="split-text">
+          <h2>${esc(b.guise)}</h2>
+          <p>${esc(b.before)}</p>
+          <p class="speech">${esc(b.taunt)} ${ST().voiced ? replay(`taunt_${S.run.chapter}`) : ''}</p>
+          <button class="btn big danger" data-act="fight-boss">${esc(b.cry)}</button>
         </div>
-        <div class="log">${esc(c.log.slice(-1)[0] || '')}</div>
-        <div class="tray">
-          <div class="gauges">
-            <div class="grit" data-tip="Grit: spend it to play cards. Refills every turn."><span>${p.grit}</span><small>/${p.maxGrit}</small><label>Grit</label></div>
-            <div class="cylinder" data-tip="${esc(cylTip)}">
-              <svg viewBox="0 0 100 100"><circle class="cyl" cx="50" cy="50" r="46"/>${chambers}<circle class="pin" cx="50" cy="50" r="6"/></svg>
-              <label>${order.length ? 'Next: ' + ROUNDS[order[0]].name : 'Empty'} · ${p.rounds}/${p.maxRounds}</label>
-            </div>
-          </div>
-          <div class="hand">${hand}</div>
-          <div class="piles">
-            <div class="satchel" aria-label="Tonics">${tonicIcons(S.run.tonics, !S.busy)}</div>
-            <button class="pile" data-act="view-pile" data-pile="draw_">Draw ${c.draw_.length}</button>
-            <button class="pile" data-act="view-pile" data-pile="discard">Discard ${c.discard.length}</button>
-            ${c.exhausted.length ? `<button class="pile" data-act="view-pile" data-pile="exhausted">Gone ${c.exhausted.length}</button>` : ''}
-            <button class="btn end-turn" data-act="end-turn" ${S.busy ? 'disabled' : ''}>End Turn</button>
-          </div>
-        </div>
-        ${targeting ? '<div class="target-hint">Choose a target — or click the card again to put it back.</div>' : ''}
       </section>`;
   },
 
@@ -490,9 +490,10 @@ const SCREENS = {
     const sh = S.shop;
     const r = S.run;
     return `
-      <section class="panel post">
+      <section class="panel post wide">
         <h2>Trading Post</h2>
         <p class="sub">${S.flash ? esc(S.flash) : '"Evening. Cash only, and no demons," says the proprietor. You check. She\'s telling the truth.'}</p>
+        <div class="post-grid">
         <div class="card-row shop-cards">
           ${sh.cards.map((c, i) => c.sold ? '<div class="card sold">SOLD</div>'
             : cardHTML({ id: c.id, up: false }, { price: c.price, cls: r.gold >= c.price ? 'pickable' : 'too-pricey', attrs: `data-act="buy-card" data-i="${i}"` })).join('')}
@@ -504,6 +505,7 @@ const SCREENS = {
           <button class="btn" data-act="buy-remove" ${r.gold >= sh.removePrice && !sh.removed ? '' : 'disabled'}>Burn a card — ${sh.removePrice}g<br><small>Remove a card from your deck</small></button>
           <button class="btn" data-act="buy-heal" ${r.gold >= sh.healPrice && r.hp < r.maxHp ? '' : 'disabled'}>Hot meal &amp; a bath — ${sh.healPrice}g<br><small>Heal 20 HP</small></button>
           <button class="btn" data-act="buy-sight" ${r.gold >= sh.sightPrice && r.sight < r.maxSight ? '' : 'disabled'}>Peyote tea — ${sh.sightPrice}g<br><small>Restore 1 Sight</small></button>
+        </div>
         </div>
         <div class="row center"><button class="btn big" data-act="leave">Ride on</button></div>
       </section>`;
@@ -558,8 +560,9 @@ const SCREENS = {
   finale: () => {
     const r = S.run;
     return `
-      <section class="panel story finale">
+      <section class="panel story finale split">
         <div class="boss-art">${ART.demonArt('grey_gentleman')}</div>
+        <div class="split-text">
         ${ST().finaleText.map((p, i) => `<p class="${i ? 'speech' : ''}">${esc(p)}${i && ST().voiced ? ' ' + replay('finale') : ''}</p>`).join('')}
         <div class="options">
           ${FINALE.options.map(o => {
@@ -567,6 +570,7 @@ const SCREENS = {
             const ok = rest ? rest.req(r) : !o.req || o.req(r);
             return `<button class="btn option" data-act="ending" data-id="${o.id}" ${ok ? '' : 'disabled'}>${esc(o.label)}${ok ? '' : `<br><small>${esc(rest ? rest.locked : o.locked)}</small>`}</button>`;
           }).join('')}
+        </div>
         </div>
       </section>`;
   },
@@ -737,6 +741,7 @@ function campHeal(r) { return Math.floor(r.maxHp * (r.ledger >= 3 ? 0.2 : 0.3) *
 function toast(text) {
   const t = document.createElement('div');
   t.className = 'toast';
+  t.setAttribute('role', 'status');
   t.textContent = text;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 4200);
@@ -787,12 +792,14 @@ function startFight(foes, kind, opts = {}) {
   S.ending = false;
   S.busy = false;
   S.deal = 'start';
-  // Slip into the Between
-  const veil = document.createElement('div');
-  veil.className = 'slip';
-  veil.innerHTML = `<span>${opts.ambushed ? 'It strikes first.' : 'The world slips.'}</span>`;
-  document.body.appendChild(veil);
-  setTimeout(() => veil.remove(), 1600 * SPD());
+  // Slip into the Between (a full-screen flash, skipped when motion is turned down)
+  if (!reducedMotion()) {
+    const veil = document.createElement('div');
+    veil.className = 'slip';
+    veil.innerHTML = `<span>${opts.ambushed ? 'It strikes first.' : 'The world slips.'}</span>`;
+    document.body.appendChild(veil);
+    setTimeout(() => veil.remove(), 1600 * SPD());
+  }
   AUDIO.sfx('slip');
   setScreen('combat');
 }
@@ -849,334 +856,22 @@ function loseFight() {
 }
 
 // ---------------------------------------------------------------------------
-// Combat interaction
-// ---------------------------------------------------------------------------
-function afterCombatRender() {
-  const c = S.combat;
-  // Drain visual effects into floaters.
-  const fx = c.fx.splice(0);
-  let delay = 0;
-  const stack = {}; // stagger floaters on the same target vertically
-  for (const e of fx) {
-    if (!e.uid) continue;
-    const el = app.querySelector(`[data-uid="${e.uid}"]`);
-    if (!el) continue;
-    let text = null, cls = '';
-    if (e.type === 'hit') {
-      text = e.n ? `-${e.n}` : (e.blocked ? 'blocked' : '0'); cls = e.n ? 'dmg' : 'blocked'; shake(el, delay);
-      AUDIO.sfx(e.uid === 'player' && e.n ? 'hurt' : e.n ? 'hit' : 'cover', delay / 1000);
-      if (e.n) hurt(el.querySelector('.foe-art, .hero-art'), delay);
-      if (e.uid === 'player' && e.n >= 12) quake();
-    }
-    else if (e.type === 'die') { dissolve(el); AUDIO.sfx('death'); continue; }
-    else if (e.type === 'dud') { text = 'Click. Dud.'; cls = 'blocked'; }
-    else if (e.type === 'ward') { text = 'Ward broken'; cls = 'buff'; }
-    else if (e.type === 'hostage_dead') { text = 'The hostage is dead'; cls = 'dmg'; AUDIO.sfx('wrong', delay / 1000); }
-    else if (e.type === 'hostage_freed') { text = 'Hostage freed!'; cls = 'heal'; AUDIO.sfx('heal', delay / 1000); }
-    else if (e.type === 'collect') { text = `Collected: ${e.name}`; cls = 'debuff'; }
-    else if (e.type === 'peek') { text = 'Seen'; cls = 'debuff'; }
-    else if (e.type === 'pierce') { text = 'Cover burned away'; cls = 'buff'; }
-    else if (e.type === 'burn') { text = `-${e.n} 🔥`; cls = 'dmg burn'; AUDIO.sfx('burn', delay / 1000); }
-    else if (e.type === 'heal' && e.n) { text = `+${e.n}`; cls = 'heal'; }
-    else if (e.type === 'cover') { text = `+${e.n} cover`; cls = 'cover'; }
-    else if (e.type === 'status') { text = `${STATUS[e.key].name} ${e.n}`; cls = STATUS[e.key].good ? 'buff' : 'debuff'; }
-    else if (e.type === 'phase') { showBanner(e.text); AUDIO.sfx('boom'); }
-    if (text) {
-      const k = stack[e.uid] = (stack[e.uid] || 0) + 1;
-      floater(el, text, cls, delay, (k - 1) * 26);
-    }
-    delay += 140 * SPD();
-  }
-  if (S.deal) { dealHand(S.deal === 'start' ? 900 : 0); S.deal = false; }
-  // Several renders can happen after the last blow; only the first one ends the fight.
-  if (c.over && !S.ending) {
-    S.ending = true;
-    S.busy = true;
-    setTimeout(() => { S.busy = false; c.over === 'win' ? winFight() : loseFight(); }, (c.over === 'win' ? 1100 : 1400) * SPD());
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Combat animation. The rules resolve instantly; these effects play on a
-// fixed overlay (#fx) so a re-render never cuts them off.
-// ---------------------------------------------------------------------------
-const reducedMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-const sleep = ms => new Promise(r => setTimeout(r, reducedMotion() ? 0 : ms * SPD()));
-const centerOf = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
-const animate = (el, frames, opts) => (el && el.animate && !reducedMotion()
-  ? el.animate(frames, { ...opts, duration: (opts.duration || 0) * SPD(), delay: (opts.delay || 0) * SPD() }) : null);
-
-function fxNode(cls, x, y, ttl = 700) {
-  const d = document.createElement('div');
-  d.className = 'fx ' + cls;
-  d.style.left = x + 'px';
-  d.style.top = y + 'px';
-  fxLayer.appendChild(d);
-  setTimeout(() => d.remove(), ttl);
-  return d;
-}
-
-function burst(p, cls, delay = 0) {
-  if (reducedMotion() || !p) return;
-  setTimeout(() => fxNode('burst ' + cls, p.x, p.y).style.setProperty('--r', Math.random()), delay * SPD());
-}
-
-function tracer(from, to, cls = '', delay = 0) {
-  if (reducedMotion()) return;
-  setTimeout(() => {
-    const dx = to.x - from.x, dy = to.y - from.y;
-    const t = fxNode('tracer ' + cls, from.x, from.y, 500);
-    t.style.width = Math.hypot(dx, dy) + 'px';
-    t.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-  }, delay * SPD());
-}
-
-function slash(el, cls, delay = 0) {
-  if (reducedMotion() || !el) return;
-  setTimeout(() => {
-    const r = el.getBoundingClientRect();
-    const d = fxNode('slash ' + cls, r.left + r.width / 2, r.top + r.height * 0.45, 600);
-    d.innerHTML = '<i></i><i></i><i></i>';
-  }, delay * SPD());
-}
-
-function hurt(el, delay = 0) {
-  if (!el) return;
-  setTimeout(() => { el.classList.remove('hurt'); void el.offsetWidth; el.classList.add('hurt'); }, delay);
-}
-
-function quake() {
-  if (reducedMotion()) return;
-  app.classList.remove('quake'); void app.offsetWidth; app.classList.add('quake');
-}
-
-/** A slain demon burns away: a copy of its art flares, rises and fades, shedding embers. */
-function dissolve(foeEl) {
-  const img = foeEl.querySelector('.foe-art .paint, .foe-art svg');
-  if (!img || reducedMotion()) return;
-  const r = img.getBoundingClientRect();
-  const ghost = img.cloneNode(true);
-  ghost.className = 'fx dying';
-  Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
-  fxLayer.appendChild(ghost);
-  animate(ghost, [
-    { filter: 'brightness(1)', transform: 'none', opacity: 1 },
-    { filter: 'brightness(3) sepia(1) saturate(4) hue-rotate(-20deg)', transform: 'translateY(-4px) scale(1.03)', opacity: 1, offset: 0.25 },
-    { filter: 'brightness(4) blur(6px)', transform: 'translateY(-40px) scale(1.12)', opacity: 0 },
-  ], { duration: 1100, easing: 'ease-in' });
-  setTimeout(() => ghost.remove(), 1150);
-  for (let k = 0; k < 10; k++) {
-    burst({ x: r.left + r.width * (0.2 + Math.random() * 0.6), y: r.top + r.height * (0.2 + Math.random() * 0.7) }, 'ember', k * 60);
-  }
-}
-
-/** Fly a copy of a card from the hand toward a point, then let it burn out. */
-function flyCard(cardEl, to, spin = 0) {
-  if (!cardEl || reducedMotion()) return;
-  const r = cardEl.getBoundingClientRect();
-  const ghost = cardEl.cloneNode(true);
-  ghost.classList.add('fx', 'ghost');
-  Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
-  fxLayer.appendChild(ghost);
-  const dx = to.x - (r.left + r.width / 2), dy = to.y - (r.top + r.height / 2);
-  animate(ghost, [
-    { transform: 'translate(0, 0) scale(1) rotate(0deg)', opacity: 1, filter: 'brightness(1)' },
-    { transform: `translate(${dx * 0.3}px, ${dy * 0.3 - 70}px) scale(1.12) rotate(${-spin / 2}deg)`, opacity: 1, filter: 'brightness(1.25)', offset: 0.4 },
-    { transform: `translate(${dx}px, ${dy}px) scale(.3) rotate(${spin}deg)`, opacity: 0, filter: 'brightness(2.5)' },
-  ], { duration: 460, easing: 'cubic-bezier(.45,0,.75,1)' });
-  setTimeout(() => ghost.remove(), 480);
-}
-
-/** New hand: cards slide in one by one from the draw pile. */
-function dealHand(wait = 0) {
-  const pile = app.querySelector('[data-pile="draw_"]');
-  if (!pile) return;
-  const from = centerOf(pile);
-  app.querySelectorAll('.hand .slot .card').forEach((el, k) => {
-    const to = centerOf(el);
-    animate(el, [
-      { transform: `translate(${from.x - to.x}px, ${from.y - to.y}px) scale(.35) rotate(25deg)`, opacity: 0 },
-      { transform: 'none', opacity: 1 },
-    ], { duration: 380, delay: wait + k * 70, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' });
-    AUDIO.sfx('deal', (wait + k * 70) * SPD() / 1000);
-  });
-}
-
-const gunPoint = heroEl => { const r = heroEl.getBoundingClientRect(); return { x: r.left + r.width * 0.78, y: r.top + r.height * 0.42 }; };
-
-/** Play card `i` at `uid` with the hero's action, then resolve it. */
-async function playCard(i, uid) {
-  const c = S.combat;
-  const card = c.hand[i];
-  const def = CARDS[card.id];
-  S.busy = true;
-  S.sel = null;
-  const cardEl = app.querySelector(`.slot[data-i="${i}"] .card`);
-  const heroEl = app.querySelector('.hero-art');
-  const foeArt = u => app.querySelector(`.foe[data-uid="${u}"] .foe-art`);
-  const targets = def.target === 'enemy' ? [foeArt(uid) || foeArt(c.alive()[0].uid)]
-    : def.target === 'all' ? [...app.querySelectorAll('.foe:not(.dead) .foe-art')] : [];
-  const dest = targets.length === 1 ? centerOf(targets[0])
-    : targets.length ? centerOf(app.querySelector('.foes')) : centerOf(heroEl);
-
-  flyCard(cardEl, dest, def.type === 'attack' ? 14 : 0);
-  AUDIO.sfx('whoosh');
-  if (/reload|speed_loader|quick_hands|load_|hellfire_load|spin_cylinder/.test(card.id)) AUDIO.sfx('reload', 0.2);
-  if (cardEl) cardEl.style.visibility = 'hidden';
-  await sleep(260);
-
-  if (def.type === 'attack') {
-    animate(heroEl, [{ transform: 'none' }, { transform: 'translateX(28px) rotate(2deg)', offset: 0.3 }, { transform: 'none' }], { duration: 380, easing: 'ease-out' });
-    if (def.rounds) {
-      const gun = gunPoint(heroEl);
-      const shots = def.rounds === 'all' ? c.p.rounds : card.id === 'ricochet' ? cardStats(card).v.n : Math.max(1, targets.length, def.rounds);
-      const loaded = c.peekRounds(def.rounds === 'all' ? c.p.rounds : def.rounds);
-      for (let k = 0; k < shots; k++) {
-        const rd = loaded[k] || null;
-        if (rd === 'dud') { AUDIO.sfx('click', k * 0.07); continue; }
-        const t = targets[k % targets.length] || targets[0];
-        if (!t) break;
-        const p = centerOf(t);
-        const hitP = { x: p.x + (Math.random() * 40 - 20), y: p.y + (Math.random() * 60 - 40) };
-        burst(gun, 'muzzle', k * 70);
-        AUDIO.sfx('shot', k * 0.07 * SPD());
-        const tcls = rd === 'silver' ? 'silver' : rd === 'blessed' ? 'holy' : rd === 'hellfire' || card.id === 'hellfire_round' || c.p.pw.consecrated ? 'fire' : '';
-        tracer(gun, hitP, tcls, k * 70);
-        burst(hitP, 'spark', k * 70 + 90);
-      }
-      quake();
-    } else {
-      targets.forEach((t, k) => { slash(t, 'blade', k * 60); AUDIO.sfx('blade', k * 0.06); });
-    }
-  } else if (def.type === 'power') {
-    burst(centerOf(heroEl), 'aura power');
-    AUDIO.sfx('buff');
-  } else if (targets.length) {
-    targets.forEach(t => { tracer(gunPoint(heroEl), centerOf(t), 'hex'); burst(centerOf(t), 'hexhit', 160); });
-    AUDIO.sfx('hex');
-  } else {
-    burst(centerOf(heroEl), 'shield');
-    if (!/reload|speed_loader|load_|hellfire_load|spin_cylinder/.test(card.id)) AUDIO.sfx(card.id === 'whiskey' ? 'heal' : 'cover');
-  }
-  await sleep(170);
-  c.play(i, uid);
-  S.busy = false;
-  render();
-}
-
-/** End the turn: the hand is swept away, then each demon acts in turn. */
-async function runEnemyTurn() {
-  const c = S.combat;
-  S.busy = true;
-  S.sel = null;
-  const pile = app.querySelector('[data-pile="discard"]');
-  if (pile) {
-    const to = centerOf(pile);
-    app.querySelectorAll('.hand .slot .card').forEach(el => flyCard(el, to, 20));
-    AUDIO.sfx('whoosh');
-  }
-  await sleep(300);
-  const queue = c.beginEnemyPhase();
-  render();
-  await sleep(250);
-  for (const e of queue) {
-    if (c.over) break;
-    if (e.hp <= 0) continue;
-    const art = app.querySelector(`.foe[data-uid="${e.uid}"] .foe-art`);
-    const heroEl = app.querySelector('.hero-art');
-    const m = e.intent;
-    if (art && m) {
-      if (m.atk) {
-        animate(art, [{ transform: 'none' }, { transform: 'translateX(-80px) scale(1.08)', offset: 0.35 }, { transform: 'none' }], { duration: 560, easing: 'ease-in-out' });
-        await sleep(200);
-        for (let h = 0; h < (m.hits || 1); h++) { slash(heroEl, 'claw', h * 120); AUDIO.sfx('claw', h * 0.12 * SPD()); }
-      } else {
-        animate(art, [{ filter: 'brightness(1)' }, { filter: 'brightness(1.9) drop-shadow(0 0 18px #ff6a2b)' }, { filter: 'brightness(1)' }], { duration: 560 });
-        await sleep(200);
-      }
-      if (m.block) { burst(centerOf(art), 'shield'); AUDIO.sfx('cover'); }
-      if (m.wrath || m.heal) { burst(centerOf(art), 'aura'); AUDIO.sfx('buff'); }
-      if (m.summon) { burst(centerOf(art), 'aura summon'); AUDIO.sfx('boom'); }
-      if (m.shaken || m.exposed || m.burn || m.curse) { tracer(centerOf(art), centerOf(heroEl), 'hex'); burst(centerOf(heroEl), 'hexhit', 160); AUDIO.sfx('hex'); }
-    }
-    c.enemyStep(e);
-    await sleep(340);
-    render();
-    await sleep(420);
-  }
-  c.endEnemyPhase();
-  S.busy = false;
-  S.deal = true;
-  render();
-}
-
-function floater(el, text, cls, delay, dy = 0) {
-  const r = el.getBoundingClientRect();
-  const f = document.createElement('div');
-  f.className = 'floater ' + cls;
-  f.textContent = text;
-  f.style.left = (r.left + r.width / 2 + (Math.random() * 40 - 20)) + 'px';
-  f.style.top = (r.top + r.height * 0.35 - dy) + 'px';
-  f.style.animationDelay = delay + 'ms';
-  fxLayer.appendChild(f);
-  setTimeout(() => f.remove(), 1400 + delay);
-}
-
-function shake(el, delay) {
-  setTimeout(() => { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }, delay);
-}
-
-function showBanner(text) {
-  const b = document.createElement('div');
-  b.className = 'phase-banner';
-  b.textContent = text;
-  document.body.appendChild(b);
-  setTimeout(() => b.remove(), 4200);
-}
-
-function clickCard(i) {
-  const c = S.combat;
-  if (S.busy || c.over) return;
-  const card = c.hand[i];
-  if (!card) return;
-  const chk = c.canPlay(card);
-  if (!chk.ok) { flashLog(chk.why); return; }
-  if (S.sel === i) { S.sel = null; render(); return; }
-  if (c.needsTarget(card) && c.alive().length > 1) { S.sel = i; render(); return; }
-  S.sel = null;
-  playCard(i, c.alive()[0] && c.alive()[0].uid);
-}
-
-function clickTarget(uid) {
-  const c = S.combat;
-  if (S.sel === null) return;
-  if (S.busy || c.over) return;
-  const i = S.sel;
-  S.sel = null;
-  playCard(i, uid);
-}
-
-function endTurn() {
-  const c = S.combat;
-  if (S.busy || c.over) return;
-  runEnemyTurn();
-}
-
-function flashLog(msg) {
-  const l = app.querySelector('.log');
-  if (!l) return;
-  l.textContent = msg;
-  l.classList.remove('warn'); void l.offsetWidth; l.classList.add('warn');
-}
-
-// ---------------------------------------------------------------------------
 // Modals
 // ---------------------------------------------------------------------------
 function openModal(html) {
-  modal.innerHTML = `<div class="modal-box">${html}</div>`;
+  S.modalReturn = focusKey(document.activeElement);
+  modal.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true">${html}</div>`;
   modal.hidden = false;
+  keyboardReady(modal);
+  // Keyboard players land inside the dialog; a finger doesn't need a focus ring.
+  const first = !TOUCH.active && modal.querySelector('button:not([disabled]), [tabindex="0"]');
+  if (first) first.focus({ preventScroll: true });
 }
-function closeModal() { modal.hidden = true; modal.innerHTML = ''; S.modalPick = null; }
+function closeModal() {
+  modal.hidden = true; modal.innerHTML = ''; S.modalPick = null;
+  const back = S.modalReturn && document.querySelector(S.modalReturn);
+  if (back) back.focus({ preventScroll: true });
+}
 
 function showCards(title, cards, pickable, onPick, cancellable = true) {
   S.modalPick = onPick || null;
@@ -1213,7 +908,8 @@ function howToPlay() {
       <p><b>Cover</b> absorbs damage and fades at the start of your turn. Watch the icons over each demon: they show what it will do next.</p>
       <p><b>Wrath</b> adds damage to every hit. <b>Exposed</b> takes 50% more damage. <b>Shaken</b> deals 25% less. <b>Hellfire</b> burns every turn.</p>
       <p><b>Other ways to ride.</b> The <b>Daily Hunt</b> is one run a day, the same for everyone, with a fixed hunter and one twist; share your result line when it's done. <b>The Long Ride</b> never ends: the chapters loop, the demons get tougher each lap, and you ride for bounty. <b>Showdown</b> is six bosses and wanted demons back to back with a ready-made deck, scored on turns. <b>Wanted</b> posters change one rule of the story, with a new one featured every week. <b>The Casebook</b> is detective work only: three cases, two demons in each, scored against par. <b>Leaderboards</b> are shared by everyone who plays the published page. <b>Settings</b> has fast animations, bigger text and voice autoplay.</p>
-      <p class="sub">Keys: 1–9 play a card, E ends your turn, Esc cancels.</p>
+      <p><b>On a phone.</b> Drag a card up out of your hand to play it, or tap it. Hold any card to read it up close, and hold an icon, status or intent to see what it means. The ☰ button holds your journal, gun belt, deck and keepsakes.</p>
+      <p class="sub">Keys: Tab moves between everything, Enter or Space presses it. In a fight, 1–9 play a card, E ends your turn, Esc cancels. On the map, at a reward or in an event, 1–9 choose. Settings has motion (Full, Fast or Still), text size, vibration, and letters on rounds for players who can't rely on colour.</p>
     </div>
     <div class="row center"><button class="btn" data-act="close-modal">Got it</button></div>`);
 }
@@ -1249,6 +945,7 @@ const ACTIONS = {
   'to-map': () => setScreen('map'),
   'to-chapter': showChapterIntro,
   'journal': showJournal,
+  'hud-menu': showHudMenu,
   'toggle-music': () => { AUDIO.unlock(); AUDIO.toggle('music'); render(); },
   'toggle-sfx': () => { AUDIO.unlock(); AUDIO.toggle('sfx'); render(); },
   'toggle-voice': () => { AUDIO.toggle('voice'); render(); },
@@ -1309,6 +1006,7 @@ const ACTIONS = {
       recordTown(false);
       r.addInfamy(3);
       AUDIO.sfx('wrong');
+      buzz(90);
       r.addCard('blood_on_hands');
       r.hp = Math.max(1, r.hp - 6);
       startFight(t.enc.foes, 'normal', { ambushed: true });
@@ -1319,28 +1017,6 @@ const ACTIONS = {
   'leave-town': () => { S.cleanSolve = false; recordTown(false); S.run.addInfamy(1); startFight(S.town.enc.foes, 'normal', { ambushed: true }); },
   'fight-elite': () => startFight((S.elite || ENCOUNTERS[S.run.chapter].elite).foes, 'elite'),
   'fight-boss': () => startFight(ST().boss(S.run.chapter).foes, 'boss'),
-
-  // combat
-  'card': el => clickCard(+el.dataset.i),
-  'target': el => clickTarget(el.dataset.uid),
-  'end-turn': endTurn,
-  'tonic': el => {
-    const c = S.combat;
-    if (S.busy || !c || c.over) return;
-    const id = c.useTonic(+el.dataset.i);
-    if (!id) return;
-    AUDIO.sfx(TONICS[id].sfx || 'heal');
-    const hero = app.querySelector('.hero-art');
-    if (hero) burst(centerOf(hero), id === 'dynamite' ? 'muzzle' : 'aura');
-    if (id === 'dynamite') { quake(); app.querySelectorAll('.foe:not(.dead) .foe-art').forEach(f => burst(centerOf(f), 'spark')); }
-    render();
-  },
-  'peek': el => {
-    const c = S.combat;
-    if (S.busy || !c || !c.peek(el.dataset.uid)) return;
-    AUDIO.sfx('sight');
-    render();
-  },
 
   // reward
   'take-card': el => {
@@ -1476,17 +1152,34 @@ document.addEventListener('click', ev => {
 });
 
 document.addEventListener('keydown', ev => {
-  if (!modal.hidden) { if (ev.key === 'Escape' && modal.querySelector('[data-act="close-modal"]')) closeModal(); return; }
+  const el = ev.target;
+  // Enter or Space presses a focused card, demon or map stop, just like a button.
+  if ((ev.key === 'Enter' || ev.key === ' ') && el.getAttribute && el.getAttribute('role') === 'button' && el.dataset.act) {
+    ev.preventDefault(); el.click(); return;
+  }
+  if (ev.ctrlKey || ev.metaKey || ev.altKey || (el.tagName === 'INPUT' && el.type !== 'checkbox')) return;
+  if (!modal.hidden) {
+    if (ev.key === 'Escape' && modal.querySelector('[data-act="close-modal"]')) closeModal();
+    else if (/^[1-9]$/.test(ev.key)) { const b = modal.querySelectorAll('[data-act="modal-pick"]')[+ev.key - 1]; if (b) b.click(); }
+    return;
+  }
+  const nth = (sel, k) => { const b = [...app.querySelectorAll(sel)].filter(x => !x.disabled)[k]; if (b) b.click(); return !!b; };
+  if (/^[1-9]$/.test(ev.key)) {
+    const k = +ev.key - 1;
+    if (S.screen === 'combat') clickCard(k);
+    else if (S.screen === 'map') nth('.nodes [data-act="pick-node"]', k);
+    else if (S.screen === 'reward') nth('[data-act="take-card"]', k);
+    else if (S.screen === 'event' || S.screen === 'finale') nth('[data-act="event-opt"], [data-act="ending"]', k);
+    else if (S.screen === 'sdRest') nth('[data-act="sd-take"]', k);
+    return;
+  }
   if (S.screen !== 'combat') return;
   if (ev.key === 'Escape') { S.sel = null; render(); }
   else if (ev.key === 'e' || ev.key === 'E') endTurn();
-  else if (/^[1-9]$/.test(ev.key)) clickCard(+ev.key - 1);
 });
 
-// Tooltips
-document.addEventListener('mouseover', ev => {
-  const el = ev.target.closest('[data-tip]');
-  if (!el) { tip.hidden = true; return; }
+// Tooltips: on hover with a mouse, on a long press with a finger.
+function showTipFor(el) {
   tip.textContent = el.dataset.tip;
   tip.hidden = false;
   const r = el.getBoundingClientRect();
@@ -1494,7 +1187,73 @@ document.addEventListener('mouseover', ev => {
   const y = r.bottom + 8 + 80 > window.innerHeight ? r.top - 8 - tip.offsetHeight : r.bottom + 8;
   tip.style.left = x + 'px';
   tip.style.top = y + 'px';
+}
+document.addEventListener('mouseover', ev => {
+  if (TOUCH.active) return;
+  const el = ev.target.closest('[data-tip]');
+  if (!el) { tip.hidden = true; return; }
+  showTipFor(el);
 });
+
+// ---------------------------------------------------------------------------
+// Touch: drag a card up out of your hand to play it; hold any card to read it
+// up close, or hold anything with a tooltip to see the tooltip.
+// ---------------------------------------------------------------------------
+const TOUCH = { active: false, drag: null, hold: null, swallow: false };
+/** Show a card big enough to read. The copy is inert: nothing in it can be clicked. */
+function zoomCard(cardEl) {
+  const copy = cardEl.cloneNode(true);
+  copy.removeAttribute('style');
+  [copy, ...copy.querySelectorAll('[data-act]')].forEach(n => n.removeAttribute('data-act'));
+  copy.classList.remove('pickable', 'too-pricey');
+  openModal(`<div class="zoom" data-act="close-modal">${copy.outerHTML}<p class="sub center">Tap anywhere to close</p></div>`);
+}
+function endHold() { if (TOUCH.hold) { clearTimeout(TOUCH.hold.timer); TOUCH.hold = null; } }
+function endDrag(play) {
+  const d = TOUCH.drag;
+  TOUCH.drag = null;
+  if (!d) return;
+  d.el.style.transform = '';
+  d.el.classList.remove('dragging');
+  if (play) { TOUCH.swallow = true; buzz(8); clickCard(d.i); }
+}
+document.addEventListener('pointerdown', ev => {
+  TOUCH.active = ev.pointerType !== 'mouse';
+  TOUCH.swallow = false; // a new gesture: only a click that belongs to a finished drag or hold is swallowed
+  if (!TOUCH.active) return;
+  if (!tip.hidden && !ev.target.closest('[data-tip]')) tip.hidden = true;
+  const held = ev.target.closest('.card, [data-tip]');
+  if (held && modal.hidden) {
+    TOUCH.hold = { x: ev.clientX, y: ev.clientY, timer: setTimeout(() => {
+      TOUCH.hold = null;
+      endDrag(false);
+      TOUCH.swallow = true;
+      buzz(10);
+      if (held.matches('.card')) zoomCard(held); else showTipFor(held);
+    }, 450) };
+  }
+  const slot = ev.target.closest('.hand .slot');
+  if (slot && S.screen === 'combat' && !S.busy) TOUCH.drag = { i: +slot.dataset.i, el: slot.querySelector('.card'), x: ev.clientX, y: ev.clientY, dy: 0 };
+}, { passive: true });
+document.addEventListener('pointermove', ev => {
+  if (TOUCH.hold && Math.hypot(ev.clientX - TOUCH.hold.x, ev.clientY - TOUCH.hold.y) > 10) endHold();
+  const d = TOUCH.drag;
+  if (!d) return;
+  const dx = ev.clientX - d.x, dy = ev.clientY - d.y;
+  if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy)) { endDrag(false); return; } // scrolling the hand sideways
+  if (dy < -6) {
+    d.dy = dy;
+    d.el.classList.add('dragging');
+    d.el.style.transform = `translateY(${Math.max(dy, -160)}px) scale(${dy < -70 ? 1.08 : 1.02})`;
+  }
+}, { passive: true });
+document.addEventListener('pointerup', () => { endHold(); endDrag(TOUCH.drag && TOUCH.drag.dy < -70); }, { passive: true });
+document.addEventListener('pointercancel', () => { endHold(); endDrag(false); }, { passive: true });
+// A long press or a drag already did the job; swallow the one click that follows it.
+document.addEventListener('click', ev => {
+  if (TOUCH.swallow) { TOUCH.swallow = false; ev.stopPropagation(); ev.preventDefault(); }
+}, true);
+document.addEventListener('contextmenu', ev => { if (TOUCH.active && ev.target.closest('.card, [data-tip]')) ev.preventDefault(); });
 
 // Drifting spores for the Between.
 (function spores() {

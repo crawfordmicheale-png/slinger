@@ -40,7 +40,10 @@ To serve it locally instead: `npm start`, or run any static file server in this 
 - **Leaderboards.** On the published page, results post to a board shared by everyone who can open it: today's Daily Hunt, best Long Ride bounty, and best Casebook file. Each player has one record that only they can write. Names come from their claude.ai profile.
 - **More to hunt.** Each chapter has four kinds of town demon and two wanted demons: the Dowser, the Pale Clerk (who audits your deck mid-fight), the Mesmerist, the Bone Wagon, the Dust Devil and the Starving Man, plus four more trail events (a wrecked stagecoach, a town with no name, an old prospector, a duel at noon).
 - **Records.** Hunts ridden and won per hunter, the hardest Ledger page you've beaten, endings seen, demons sent back, clean solves and your clean-solve streak, recent Daily results and your best Casebook file.
-- **Settings.** Fast animations, four text sizes, and whether letters and taunts are read aloud automatically.
+- **Settings.** Motion (Full, Fast, or Still for no movement; Still is also used when the device asks for reduced motion), four text sizes, voice autoplay, vibration on hits, and letters on rounds (L, S, H, ✝, ∴, ✕) for players who can't rely on colour.
+- **Fits the screen.** On a laptop (1280×720 and up) no screen scrolls: towns and Casebook cases are a case ledger with one row per stranger, the trading post lays its wares out in a grid, boss and finale screens put the art beside the words, and the fight scales its art to the window. On a phone every fight fits on one screen, and the header folds into a ☰ menu.
+- **Touch.** Drag a card up out of your hand to play it; hold a card to read it up close; hold anything with a tooltip to see it. Phones buzz on hits, kills and wrong accusations.
+- **Keyboard and screen readers.** Everything can be reached with Tab and pressed with Enter or Space, focus survives re-renders, number keys choose on the map, rewards and events, and cards, demons, the cylinder and health bars have spoken labels. The fight log is announced as it changes.
 - **Combat.** You get **Grit** (energy) every turn to spend on cards. **Rounds** are bullets in a six-shooter. Shot cards spend them, and they only come back when you play **Reload**. **Cover** blocks damage. The icons over each demon show what it will do next.
 - **Statuses.** Wrath adds damage to every hit, Exposed takes +50% damage, Shaken deals −25%, and Hellfire burns every turn.
 - **Keepsakes** (relics). You start with your old Tin Star and Clara's Locket. Beating a boss gives you a keepsake of the sibling you avenged.
@@ -53,13 +56,16 @@ Keys in combat: `1`–`9` play a card, `E` ends your turn, `Esc` cancels targeti
 
 | File | What's in it |
 | --- | --- |
-| `js/data.js` | All content: cards, keepsakes, demons, encounters, townsfolk tells, trail events, story text |
+| `js/cards.js` | Every card, and the rounds they fire |
+| `js/data.js` | Hunters, keepsakes, demons, encounters, townsfolk, and the rules for each mode |
+| `js/story.js` | Trail events, letters, story stops, bosses' words, endings, and each hunter's own telling |
 | `js/game.js` | Rules engine (`Combat`, `Run`). No DOM, so it runs in Node |
 | `js/art.js` | Painted character art (`art/*.webp`), with inline SVG silhouettes as a fallback |
 | `art/` | Painted art generated with Higgsfield (GPT Image 2.5): Jonah, 20 demons, 6 townsfolk portraits, the town by day and in the Between, and an illustration for every card (`art/cards/`) |
 | `js/audio.js` | Sound effects and music, all synthesized with Web Audio (no audio files): plucked guitar, whistle, drones, bells, gunshots with canyon echo |
 | `art/voice/` | Voiced lines (Higgsfield, ElevenLabs voices): the three chapter letters, each boss's taunt and last words, and the finale |
-| `js/ui.js` | Screens, input handling, and combat animation (card flights, gunfire tracers, slashes, demon lunges, death burns) |
+| `js/ui.js` | Screens, input (mouse, touch and keyboard), settings, saving, and art preloading |
+| `js/combat-ui.js` | The fight: its screen, animation (card flights, gunfire tracers, slashes, demon lunges, death burns) and controls |
 | `js/modes.js` | Settings, Records, the guided first run, the Daily Hunt, and the Casebook |
 | `css/style.css` | Styling for daylight and for the Between |
 | `tests/sim.js` | Headless simulation. A greedy bot plays hundreds of full runs, checking invariants and reporting win rate |

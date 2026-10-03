@@ -42,7 +42,9 @@ h1, h2, h3 { font-family: var(--font-title); font-weight: normal; letter-spacing
   transition: opacity 1.4s ease;
 }
 .bg-day { background-image: url("../art/town_day.webp"); }
-.bg-between { background-image: url("../art/town_between.webp"); opacity: 0; }
+.bg-between { opacity: 0; }
+/* The Between backdrop loads once the title screen is up, not before it. */
+body.art-ready .bg-between { background-image: url("../art/town_between.webp"); }
 
 #spores { position: absolute; inset: 0; opacity: 0; transition: opacity 1.4s ease; }
 #spores i {
@@ -808,3 +810,319 @@ body.fast .fx.burst, body.fast .fx.tracer, body.fast .fx.slash i, body.fast .hur
   .hunters.small .hunter b { font-size: 14px; }
   .lb-table td:last-child small { display: block; }
 }
+
+/* ================================================================ polish pass: layout */
+/* ---- the case ledger: towns and the Casebook. One row per stranger on a wide screen. */
+.folks.ledger { display: grid; gap: 10px; max-width: 1180px; margin: 12px auto 0; }
+.ledger .folk {
+  width: auto; display: grid; align-items: start; gap: 4px 14px; padding: 10px 14px; text-align: left;
+  grid-template-columns: 96px minmax(170px, 210px) repeat(3, minmax(0, 1fr)) 132px;
+}
+.cb-ledger .folk { grid-template-columns: 84px minmax(170px, 210px) repeat(2, minmax(0, 1fr)) 132px; }
+.ledger .folk .portrait { width: 96px; height: 124px; grid-row: span 1; }
+.cb-ledger .folk .portrait { width: 84px; height: 108px; }
+.ledger .who { position: relative; min-width: 0; }
+.ledger .folk-name { margin-top: 2px; }
+.ledger .tell { margin: 6px 0 0; font-size: calc(14px * var(--ts, 1)); font-style: italic; opacity: .85; line-height: 1.3; }
+.ledger .verdict { margin: 6px 0 0; }
+.ledger .cell { min-width: 0; padding: 6px 8px; border-left: 3px solid #b88c5266; background: #fff7e255; border-radius: 2px; min-height: 100%; display: flex; flex-direction: column; gap: 4px; font-size: calc(14.5px * var(--ts, 1)); line-height: 1.3; }
+.ledger .cell.answered { background: #fff7e2; border-left-color: var(--rust); }
+.ledger .cell b { font-family: var(--font-title); font-weight: normal; font-size: calc(11.5px * var(--ts, 1)); letter-spacing: .06em; text-transform: uppercase; color: var(--rust); }
+.ledger .cell .btn.ask { margin: 0; align-self: flex-start; font-family: var(--font-body); }
+.ledger .cell .unasked { opacity: .4; }
+.ledger .folk-actions { flex-direction: column; align-items: stretch; gap: 6px; align-self: center; }
+.ledger .folk-actions .btn { margin: 0; }
+.ledger .folk.seen-demon .cell { background: #4a1c1c; border-left-color: var(--ember); }
+.ledger .folk.seen-demon .cell b { color: #ff9a6a; }
+.ledger .folk.fibber .cell:first-of-type { border-left-color: #7a1bb0; }
+.fib-note { display: block; font-style: italic; color: #5b1a8a; font-size: calc(13px * var(--ts, 1)); }
+.ledger .cb-mark { position: static; float: right; width: 28px; height: 28px; font-size: 14px; margin-left: 6px; }
+.casebook .folks.ledger .folk { width: auto; padding: 10px 14px; }
+.casebook .folks.ledger .folk .portrait { width: 84px; height: 108px; }
+.case-result.slim { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 18px; max-width: 760px; padding: 10px 16px; }
+.case-result.slim h3, .case-result.slim p { margin: 0; }
+.case-result.slim .big-score { font-size: calc(26px * var(--ts, 1)); }
+.case-result.slim .btn { margin: 0; }
+.town > .sub, .casebook > .sub { max-width: 900px; }
+.casebar { margin: 8px auto; }
+@media (max-width: 760px) {
+  .ledger .folk, .cb-ledger .folk, .casebook .folks.ledger .folk {
+    width: 100%; grid-template-columns: 76px minmax(0, 1fr); gap: 6px 10px; padding: 10px;
+  }
+  .ledger .folk .portrait, .casebook .folks.ledger .folk .portrait { width: 76px; height: 98px; grid-row: span 1; }
+  .ledger .cell, .ledger .folk-actions { grid-column: 1 / -1; }
+  .ledger .cell { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-height: 0; padding: 4px 8px; }
+  .ledger .cell b { flex: 0 0 auto; }
+  .ledger .cell .answer { flex: 1 1 60%; }
+  .ledger .folk-actions { flex-direction: row; justify-content: flex-end; }
+  .ledger .tell { font-size: 13.5px; }
+}
+
+/* ---- wider panels for screens that lay things side by side */
+.panel.wide { max-width: 1160px; }
+.post-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; text-align: left; }
+.post-grid .shop-cards { margin-top: 4px; gap: 12px; justify-content: flex-start; }
+.post-grid .shop-cards .card { width: 136px; height: 206px; padding: 6px 7px 8px; }
+.post-grid .shop-cards .card .c-art { height: 70px; }
+.post-grid .shop-cards .card .c-name { font-size: 13px; min-height: 28px; }
+.post-grid .shop-cards .card .c-text { font-size: 12.5px; }
+.post-grid .services { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; margin: 0; }
+.post-grid .services .btn { max-width: none; margin: 0; padding: 6px 10px; text-align: left; font-size: 14.5px; line-height: 1.25; }
+.post-grid .services .btn small { font-size: 12.5px; }
+.post-grid .services .btn .keepsake { width: 22px; height: 22px; font-size: 9px; vertical-align: middle; }
+
+/* ---- boss, finale and showdown intros: art beside the words */
+.panel.split { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 8px 28px; align-items: center; max-width: 980px; text-align: left; }
+.panel.split .boss-art { margin: 0; width: 240px; height: 320px; }
+.panel.split .split-text > *:first-child { margin-top: 0; }
+.panel.split .options { align-items: stretch; }
+.panel.split .option { width: 100%; }
+@media (max-width: 760px) {
+  .post-grid { grid-template-columns: 1fr; }
+  .post-grid .shop-cards { justify-content: center; }
+  .panel.split { grid-template-columns: 1fr; text-align: center; }
+  .panel.split .boss-art { margin: 0 auto; width: 170px; height: 220px; }
+  .panel.split .split-text { text-align: left; }
+}
+
+/* ---- the fight fits the window: art scales with the height left over */
+:root { --hud-h: 50px; }
+.battle { min-height: calc(100dvh - var(--hud-h) - 32px); }
+@media (min-width: 761px) {
+  .battle { --art-h: clamp(130px, calc(100dvh - 520px), 250px); }
+  .hero-art, .foe-art { height: var(--art-h); width: calc(var(--art-h) * 0.72); }
+  .foe.is-boss .foe-art { height: calc(var(--art-h) * 1.22); width: calc(var(--art-h) * 0.9); }
+  .foe.is-minion .foe-art { height: calc(var(--art-h) * 0.6); width: calc(var(--art-h) * 0.46); }
+  .arena { min-height: 0; padding: 4px 0; }
+}
+@media (min-width: 761px) and (max-height: 800px) {
+  #app { padding-top: 8px; padding-bottom: 8px; }
+  .battle-banner { display: none; }
+  .hand { min-height: 214px; }
+  .hand .slot { width: 140px; height: 206px; margin: 0 -12px; }
+  .hand .card { width: 140px; height: 206px; padding: 6px 7px 8px; }
+  .hand .card .c-art { height: 70px; }
+  .hand .card .c-name { font-size: 13px; min-height: 28px; }
+  .hand .card .c-text { font-size: 12.5px; }
+  .hand .slot.playable:hover .card, .hand .slot.selected .card { transform: translateY(-30px) rotate(calc(-1 * var(--rot))) scale(1.08); }
+}
+
+/* ---- short desktop screens: tighter panels, title and map */
+@media (min-width: 761px) and (max-height: 860px) {
+  .panel { margin: 10px auto; padding: 18px 26px; }
+  .panel h2 { font-size: 26px; margin-bottom: 6px; }
+  .map h2, .town h2 { font-size: 30px; margin: 4px 0; }
+  .title-screen { padding-top: 5vh; }
+  .menu { margin-top: 18px; }
+  .chapter-map { max-width: 640px; margin: 6px auto 0; }
+  .node { min-height: 0; padding: 12px 12px; gap: 4px; }
+  .node-ico { font-size: 34px; }
+  .prompt { margin-top: 8px; }
+  .poster { margin: 6px auto; padding: 16px; }
+  .poster-head { font-size: 52px; }
+  .poster-art { width: 170px; height: 200px; margin: 8px auto; }
+  .hunters .hunter-art, .hunters .hunter-art .paint { width: 90px; height: 120px; }
+  .hunter-blurb { font-size: 13px; }
+  .setup-h { margin: 14px 0 6px; }
+  .reward .loot { margin: 8px 0; }
+  .card-row { margin-top: 6px; }
+}
+
+/* ---- records in three columns; challenges and showdown spread wide */
+.rec-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 28px; text-align: left; }
+.rec-cols .setup-h:first-child { margin-top: 4px; }
+.stat-grid.compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 6px 0 10px; }
+.stat-grid.compact .stat { padding: 6px 4px; }
+.stat-grid.compact .stat b { font-size: calc(20px * var(--ts, 1)); }
+.stat-grid.compact .stat span { font-size: calc(12.5px * var(--ts, 1)); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 4px 0 8px; font-size: calc(15px * var(--ts, 1)); }
+.kv dt { opacity: .75; }
+.kv dd { margin: 0; font-family: var(--font-title); color: var(--rust); }
+.kv dd small { font-family: var(--font-body); color: var(--ink); opacity: .7; }
+.records .rec-list li { font-size: calc(14.5px * var(--ts, 1)); }
+.posters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wanted-card { padding: 14px 12px 10px; }
+.wanted-card .btn { margin: 0; }
+.hunters.small { grid-template-columns: repeat(auto-fit, minmax(180px, 220px)); justify-content: center; }
+.hunters.small .hunter { flex-direction: row; text-align: left; padding: 6px 10px; gap: 10px; }
+.hunters.small .hunter-art, .hunters.small .hunter-art .paint { width: 46px; height: 64px; flex: none; }
+.hunters.small .hunter b { font-size: calc(16px * var(--ts, 1)); }
+.hunters.small .hunter small { display: block; }
+.hunters.small .hunter > b + small { margin-top: 2px; }
+.hunters.small .hunter { display: grid; grid-template-columns: 46px 1fr; grid-template-rows: auto auto; align-items: center; }
+.hunters.small .hunter .hunter-art { grid-row: span 2; }
+.presets { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* the trading post: cards on top, the counter's other wares in a grid below */
+.post-grid { grid-template-columns: 1fr; gap: 12px; }
+.post-grid .shop-cards { justify-content: center; }
+.post-grid .services { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+/* the casebook ledger: small portraits, rows no taller than they need to be */
+.cb-ledger .folk, .casebook .folks.ledger .folk { padding: 8px 12px; align-items: center; }
+.cb-ledger .folk .portrait, .casebook .folks.ledger .folk .portrait { width: 62px; height: 80px; }
+.cb-ledger .folk { grid-template-columns: 62px minmax(160px, 200px) repeat(2, minmax(0, 1fr)) 132px; }
+.ledger .cell { min-height: 0; align-self: stretch; }
+.casebook > .sub { margin-bottom: 4px; }
+@media (min-width: 761px) and (max-height: 860px) {
+  .ledger .folk .portrait { width: 84px; height: 108px; }
+  .ledger .folk { grid-template-columns: 84px minmax(160px, 200px) repeat(3, minmax(0, 1fr)) 132px; padding: 8px 12px; }
+  .cb-ledger .folk { grid-template-columns: 62px minmax(160px, 200px) repeat(2, minmax(0, 1fr)) 132px; }
+  .casebook .case-kicker { margin-top: 2px; }
+}
+@media (max-width: 760px) {
+  .rec-cols { grid-template-columns: 1fr; }
+  .posters { grid-template-columns: 1fr; }
+  .presets { grid-template-columns: 1fr 1fr; }
+  .hunters.small { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hunters.small .hunter { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .hunters.small .hunter .hunter-art { grid-row: auto; }
+  .hunters.small .hunter small { display: none; }
+}
+.records .rec-list { list-style: none; padding-left: 0; }
+@media (min-width: 761px) and (max-height: 860px) {
+  .cb-ledger .folk .portrait, .casebook .folks.ledger .folk .portrait { width: 50px; height: 64px; }
+  .cb-ledger .folk { grid-template-columns: 50px minmax(150px, 190px) repeat(2, minmax(0, 1fr)) 124px; padding: 6px 10px; gap: 4px 12px; }
+  .cb-ledger .cell { padding: 4px 8px; }
+  .cb-ledger .folk-actions { gap: 4px; }
+  .cb-ledger .folk-actions .btn { padding: 4px 8px; }
+  .folks.cb-ledger { gap: 6px; margin-top: 8px; }
+  .casebook h2 { margin: 2px 0; }
+  .casebook > .sub { padding: 2px 12px; }
+  .challenges p { margin: 6px 0; }
+  .wanted-card { padding: 12px 10px 8px; gap: 4px; }
+  .posters { gap: 10px; margin-top: 10px; }
+}
+@media (min-width: 761px) and (max-height: 760px) { .challenges .hunters.small { margin-bottom: -4px; } .challenges > p { font-size: 15.5px; } }
+
+/* ---- Still: no movement (also used when the device asks for reduced motion). Fades stay. */
+body.still .foe-art .paint, body.still .foe-art svg, body.still .bg-between, body.still .foe.targetable .foe-art,
+body.still .m-node.reach circle, body.still .coach-glow, body.still #coach, body.still #spores i,
+body.still .fire span, body.still .hurt, body.still #app.quake, body.still .shake, body.still .log.warn { animation: none !important; }
+body.still .floater { animation: float-still 1.3s linear forwards; }
+@keyframes float-still { 0%, 85% { opacity: 1; transform: translate(-50%, -24px); } 100% { opacity: 0; transform: translate(-50%, -24px); } }
+body.still .card, body.still .node, body.still .btn, body.still .hand .slot .card { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .floater { animation: float-still 1.3s linear forwards; }
+  #spores i, .fire span { animation: none !important; }
+}
+
+/* ---- the header: one row on a phone, with a menu for the rest */
+.hud-menu { display: none; }
+.inf-icon { display: none; }
+.hud-sheet h4 { font-family: var(--font-title); font-weight: normal; color: var(--rust); margin: 14px 0 6px; }
+.sheet-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.sheet-list li { display: flex; gap: 8px; align-items: center; font-size: 15px; }
+.sheet-list .keepsake, .sheet-list .tonic { flex: none; }
+@media (max-width: 760px) {
+  :root { --hud-h: 44px; }
+  #hud { flex-wrap: nowrap; padding: 6px 10px; gap: 8px; }
+  #hud .hud-right, #hud .hud-name, #hud .hud-mid { display: none; }
+  #hud .hud-left { flex-wrap: nowrap; gap: 10px; min-width: 0; }
+  #hud .hud-sight .eye-ico { width: 20px; height: 13px; }
+  .hud-menu { display: inline-block; margin-left: auto; font-size: 18px; padding: 2px 12px; }
+  .inf-label { display: none; }
+  .inf-icon { display: inline; }
+}
+
+/* ---- the fight on a phone: everything on one screen */
+@media (max-width: 760px) {
+  .battle { min-height: 0; }
+  .battle-banner { display: none; }
+  #app.screen-combat { padding: 6px 10px 0; }
+  .arena { gap: 6px; padding: 2px 0; }
+  .foes { flex-wrap: nowrap; width: 100%; gap: 6px; justify-content: center; align-items: flex-end; }
+  .foe { min-width: 0; flex: 1 1 0; max-width: 130px; }
+  .foe.is-boss { max-width: 170px; flex-grow: 1.5; }
+  .foe.is-minion { max-width: 90px; }
+  .foe-art, .foe.is-boss .foe-art, .foe.is-minion .foe-art { width: 100%; height: auto; aspect-ratio: 3 / 4; max-height: 22vh; }
+  .foe.is-boss .foe-art { max-height: 27vh; }
+  .foe .bar { width: 100%; max-width: 120px; height: 16px; }
+  .foe .foe-name { font-size: 12px; margin: 2px 0; line-height: 1.1; }
+  .intents { min-height: 22px; }
+  .intent { font-size: 12px; padding: 1px 6px; }
+  .statuses { min-height: 0; max-width: 100%; }
+  .st { font-size: 11px; padding: 0 4px; }
+  .hero-side { gap: 8px; align-items: center; }
+  .hero-side .hero-art { width: 60px; height: 84px; }
+  .log { min-height: 20px; font-size: 14px; line-height: 1.25; }
+  .tray { gap: 4px; padding-top: 0; }
+  .grit { width: 58px; height: 58px; }
+  .grit span { font-size: 24px; }
+  .cylinder { width: 72px; }
+  .cylinder svg { width: 62px; height: 62px; }
+  .cylinder label { font-size: 11px; }
+  .piles { gap: 4px; }
+  .pile { padding: 4px 6px; font-size: 12px; }
+  .end-turn { font-size: 16px; padding: 8px 14px; margin: 0; }
+  .satchel .tonic { width: 30px; height: 30px; }
+  .hand { min-height: 0; padding: 34px 20px 10px; }
+  .target-hint { bottom: 210px; }
+}
+@media (max-width: 760px) and (max-height: 700px) {
+  .hand .slot, .hand .card { width: 108px; height: 166px; }
+  .hand .card .c-art { height: 50px; }
+  .hero-side .hero-art { width: 50px; height: 70px; }
+}
+@media (max-width: 760px) {
+  .cylinder label { white-space: nowrap; font-size: 10.5px; }
+  /* a stranger's card on a phone: portrait and name, answers full width, unasked questions in one row */
+  .ledger .folk, .cb-ledger .folk, .casebook .folks.ledger .folk { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-flow: row dense; }
+  .ledger .folk .portrait { grid-column: span 2; justify-self: center; }
+  .ledger .who { grid-column: span 4; }
+  .ledger .cell.answered { grid-column: 1 / -1; }
+  .ledger .cell:not(.answered) { grid-column: span 2; padding: 0; border: 0; background: none; }
+  .cb-ledger .cell:not(.answered) { grid-column: span 3; }
+  .ledger .cell:not(.answered) b, .ledger .cell .unasked { display: none; }
+  .ledger .cell:not(.answered) .btn.ask { width: 100%; font-size: 12.5px; padding: 6px 4px; }
+  .ledger .folk-actions { grid-column: 1 / -1; }
+  .ledger .folk-actions .btn { flex: 1; }
+  .ledger .tell { margin-top: 2px; }
+  .town > .sub, .casebook > .sub { font-size: 15px; padding: 4px 10px; }
+  .casebar .hint { font-size: 13px; }
+  .map h2, .town h2 { font-size: 28px; margin: 4px 0; }
+}
+@media (max-width: 760px) {
+  /* trading post: the cards scroll sideways in one strip */
+  .post-grid .shop-cards { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; scroll-snap-type: x proximity; padding: 16px 6px 18px; margin: 0 -6px; -webkit-overflow-scrolling: touch; }
+  .post-grid .shop-cards .card { flex: none; scroll-snap-align: start; }
+  .post-grid .services .btn { font-size: 14px; }
+  .post-grid .services .btn small { font-size: 12px; }
+  /* rewards: three cards across */
+  .reward .card-row { gap: 6px; flex-wrap: nowrap; }
+  .reward .card-row .card { width: 112px; height: 178px; padding: 5px 5px 6px; }
+  .reward .card-row .card .c-art { height: 52px; }
+  .reward .card-row .card .c-name { font-size: 12px; min-height: 26px; padding: 0 10px 0 14px; }
+  .reward .card-row .card .c-text { font-size: 11.5px; }
+  .reward .card-row .card .c-type { font-size: 9px; }
+  /* choosing a hunter: compact rows, the story blurb only for the one chosen */
+  .hunters:not(.small) { grid-template-columns: 1fr; gap: 6px; }
+  .hunters:not(.small) .hunter { display: grid; grid-template-columns: 64px 1fr; text-align: left; align-items: center; column-gap: 12px; padding: 8px 10px; }
+  .hunters:not(.small) .hunter .hunter-art, .hunters:not(.small) .hunter .hunter-art .paint { width: 64px; height: 88px; grid-row: span 3; }
+  .hunters:not(.small) .hunter:not(.sel) .hunter-blurb { display: none; }
+  .cb-ledger .folk .portrait, .casebook .folks.ledger .folk .portrait { width: 64px; height: 82px; }
+}
+
+/* ---- touch */
+body { overscroll-behavior-y: none; }
+button, [data-act], .card { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.hand, .hand .slot { touch-action: pan-x; }
+.card, .hand, .foe, .battle, .hud-left { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.hand .slot .card.dragging { transition: none; z-index: 10; box-shadow: 0 16px 30px #000c, 0 0 0 3px #ffcf6a; }
+.zoom { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; }
+.zoom .card { transform: scale(1.55); transform-origin: top center; margin-bottom: calc(228px * 0.55); }
+@media (max-width: 760px) {
+  .modal-box:has(.zoom) { background: transparent; border: 0; box-shadow: none; }
+  .zoom .sub { color: #f7e3b4; }
+  .reward .keepsake-line { display: block; text-align: left; }
+  .reward .keepsake-line .keepsake, .reward .keepsake-line .tonic { vertical-align: middle; margin-right: 4px; }
+}
+
+/* ---- accessibility */
+:focus-visible { outline: 3px solid #ffcf6a; outline-offset: 3px; border-radius: 4px; }
+.hand .slot:focus-visible { outline: none; }
+.hand .slot:focus-visible .card { box-shadow: 0 0 0 4px #ffcf6a, 0 10px 24px #000c; transform: translateY(-24px); }
+.foe:focus-visible .foe-art { filter: drop-shadow(0 0 12px #ffcf6a); }
+.cylinder .rmark { display: none; font: bold 11px var(--font-body); fill: #1b1f22; pointer-events: none; }
+body.round-labels .cylinder .rmark { display: inline; }
+body.round-labels .cylinder .chamber.r-dud + .rmark { fill: #fff; }
+body.between .bg-between { background-image: url("../art/town_between.webp"); }
+@media (max-width: 760px) { .hand { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); } }
